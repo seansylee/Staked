@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Alert, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { z } from 'zod';
+import { posthog } from '@/lib/posthog';
+import { registerForPushNotifications } from '@/lib/notifications';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -27,9 +29,12 @@ export default function SignUpScreen() {
     setLoading(true);
     try {
       await signUp(data.email, data.password);
+      posthog.capture('user_signed_up');
+      registerForPushNotifications(); // fire and forget
       router.replace('/(tabs)');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Sign up failed. Please try again.';
+      posthog.capture('sign_up_failed', { error: message });
       Alert.alert('Error', message);
     } finally {
       setLoading(false);

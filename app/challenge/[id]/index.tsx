@@ -14,6 +14,7 @@ import { StakeSummaryPanel } from '@/components/challenge/StakeSummaryPanel';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { completeChallenge } from '@/api/payments';
+import { posthog } from '@/lib/posthog';
 import { useCheckIn } from '@/hooks/useCheckIn';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { computeGoalProgress, computeProtection, daysRemainingForChallenge, isChallengeComplete } from '@/utils/protection';
@@ -64,6 +65,11 @@ export default function ChallengeDetailScreen() {
             try {
               const completionData = await completeChallenge(id);
               setChallengeCompleted(completionData.challenge);
+              posthog.capture('challenge_completed', {
+                challenge_id: id,
+                protected_cents: completionData.protectedCents,
+                forfeited_cents: completionData.forfeitedCents,
+              });
               router.replace(`/challenge/${id}/summary`);
             } catch (err: unknown) {
               const message = err instanceof Error ? err.message : 'Failed to complete challenge';

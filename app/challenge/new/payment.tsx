@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
+import { posthog } from '@/lib/posthog';
 import { Card } from '@/components/ui/Card';
 import { confirmChallengeStart, createPaymentIntent } from '@/api/payments';
 import { useChallengeStore } from '@/store/useChallengeStore';
@@ -39,6 +40,7 @@ export default function PaymentScreen() {
 
       if (presentError) {
         if (presentError.code !== 'Canceled') {
+          posthog.capture('payment_failed', { error_code: presentError.code });
           Alert.alert('Payment Failed', presentError.message);
         }
         return;
@@ -47,6 +49,11 @@ export default function PaymentScreen() {
       // Payment succeeded — extract payment intent ID from client secret
       const paymentIntentId = clientSecret.split('_secret_')[0];
       await confirmChallengeStart(paymentIntentId, draft);
+      posthog.capture('challenge_created', {
+        stake_cents: draft.stake_amount_cents,
+        duration_days: draft.duration_days,
+        goal_count: draft.goals.length,
+      });
       await fetchChallenges();
       clearDraft();
 

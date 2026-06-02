@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Alert, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { z } from 'zod';
+import { registerForPushNotifications } from '@/lib/notifications';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -27,6 +28,7 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       await signIn(data.email, data.password);
+      registerForPushNotifications(); // fire and forget
       router.replace('/(tabs)');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Sign in failed. Please try again.';
