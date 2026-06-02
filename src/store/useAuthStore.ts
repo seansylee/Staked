@@ -1,5 +1,6 @@
 import { Session, User } from '@supabase/supabase-js';
 import { create } from 'zustand';
+import { DEMO_MODE, DEMO_USER } from '@/lib/demo';
 import { supabase } from '@/lib/supabase';
 import { Profile } from '@/types';
 
@@ -23,6 +24,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: true,
 
   initialize: async () => {
+    if (DEMO_MODE) {
+      set({
+        session: { access_token: 'demo', token_type: 'bearer', expires_in: 9999, refresh_token: 'demo', user: DEMO_USER as unknown as User } as Session,
+        user: DEMO_USER as unknown as User,
+        profile: { id: DEMO_USER.id, email: DEMO_USER.email, full_name: 'Demo User', stripe_customer_id: null, push_token: null, created_at: DEMO_USER.created_at },
+        isLoading: false,
+      });
+      return;
+    }
+
     const { data: { session } } = await supabase.auth.getSession();
     set({ session, user: session?.user ?? null });
 

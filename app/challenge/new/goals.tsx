@@ -1,9 +1,10 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   Alert,
   FlatList,
-  SafeAreaView,
+  
   ScrollView,
   StyleSheet,
   Text,

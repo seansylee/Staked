@@ -1,6 +1,7 @@
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export default function RootLayout() {
@@ -11,8 +12,10 @@ export default function RootLayout() {
   }, [initialize]);
 
   return (
-    <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}>
-      <Stack screenOptions={{ headerShown: false }} />
-    </StripeProvider>
+    <SafeAreaProvider>
+      <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </StripeProvider>
+    </SafeAreaProvider>
   );
 }

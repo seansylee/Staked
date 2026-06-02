@@ -1,5 +1,6 @@
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { create } from 'zustand';
+import { DEMO_CHECK_INS, DEMO_CHALLENGES, DEMO_GOALS, DEMO_MODE } from '@/lib/demo';
 import { supabase } from '@/lib/supabase';
 import { Challenge, ChallengeDraft, CheckIn, Goal, GoalDraft } from '@/types';
 import { getWindowKey } from '@/utils/dates';
@@ -38,6 +39,21 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
   _channel: null,
 
   fetchChallenges: async () => {
+    if (DEMO_MODE) {
+      const goalsMap: Record<string, Goal[]> = {};
+      const checkInsMap: Record<string, CheckIn[]> = {};
+      for (const g of DEMO_GOALS) {
+        if (!goalsMap[g.challenge_id]) goalsMap[g.challenge_id] = [];
+        goalsMap[g.challenge_id].push(g);
+      }
+      for (const ci of DEMO_CHECK_INS) {
+        if (!checkInsMap[ci.challenge_id]) checkInsMap[ci.challenge_id] = [];
+        checkInsMap[ci.challenge_id].push(ci);
+      }
+      set({ challenges: DEMO_CHALLENGES, goalsMap, checkInsMap, isLoading: false });
+      return;
+    }
+
     set({ isLoading: true });
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { set({ isLoading: false }); return; }
