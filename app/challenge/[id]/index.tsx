@@ -1,15 +1,7 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GoalRow } from '@/components/challenge/GoalRow';
 import { StakeSummaryPanel } from '@/components/challenge/StakeSummaryPanel';
 import { Badge } from '@/components/ui/Badge';
@@ -17,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { completeChallenge } from '@/api/payments';
 import { posthog } from '@/lib/posthog';
 import { useCheckIn } from '@/hooks/useCheckIn';
+import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { computeGoalProgress, computeProtection, daysRemainingForChallenge, isChallengeComplete } from '@/utils/protection';
 import { formatDateShort, pluralize } from '@/utils/formatting';
@@ -88,7 +81,7 @@ export default function ChallengeDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <View style={styles.center}>
           <Text style={styles.notFound}>Challenge not found</Text>
@@ -104,15 +97,15 @@ export default function ChallengeDetailScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <View style={styles.header}>
+        <View style={styles.titleRow}>
           <Text style={styles.challengeName}>{challenge.name}</Text>
           <Badge
-            label={canComplete ? 'Ready to complete' : `${pluralize(daysLeft, 'day')} left`}
-            color={canComplete ? '#dcfce7' : '#f0f0f0'}
-            textColor={canComplete ? '#16a34a' : '#555'}
+            label={canComplete ? 'Complete' : `${pluralize(daysLeft, 'day')}`}
+            color={canComplete ? colors.successBg : colors.surfaceHigh}
+            textColor={canComplete ? colors.success : colors.textSecondary}
           />
         </View>
 
@@ -120,10 +113,12 @@ export default function ChallengeDetailScreen() {
           {formatDateShort(challenge.start_date)} — {formatDateShort(challenge.end_date)}
         </Text>
 
-        <StakeSummaryPanel summary={summary} />
+        <View style={styles.vaultSection}>
+          <StakeSummaryPanel summary={summary} />
+        </View>
 
         <View style={styles.goalsSection}>
-          <Text style={styles.sectionTitle}>Goals</Text>
+          <Text style={styles.sectionLabel}>Goals</Text>
           {goalProgressList.map((progress) => (
             <GoalRow
               key={progress.goal.id}
@@ -148,29 +143,50 @@ export default function ChallengeDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f8f8' },
-  scroll: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 48, gap: 16 },
-  back: {},
-  backText: { fontSize: 16, color: '#555' },
-  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  challengeName: { fontSize: 28, fontWeight: '800', color: '#1a1a1a', flex: 1 },
-  dates: { fontSize: 13, color: '#999', marginTop: -8 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 48, gap: 6 },
+  back: { paddingVertical: 12 },
+  backText: { fontSize: 22, color: colors.textSecondary },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 4,
+  },
+  challengeName: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -1,
+    flex: 1,
+  },
+  dates: { fontSize: 12, color: colors.textMuted, marginBottom: 8 },
+  vaultSection: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 12,
+  },
   goalsSection: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 10,
   },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#999',
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingVertical: 14,
+    letterSpacing: 0.8,
+    paddingVertical: 16,
   },
-  completeBtn: { marginTop: 8 },
+  completeBtn: { marginTop: 16 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  notFound: { fontSize: 16, color: '#666' },
+  notFound: { fontSize: 15, color: colors.textSecondary },
 });

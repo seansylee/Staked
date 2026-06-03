@@ -1,7 +1,7 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Card } from '@/components/ui/Card';
+import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { Challenge } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatting';
@@ -18,7 +18,7 @@ export default function HistoryScreen() {
 
       {completed.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No completed challenges yet</Text>
+          <Text style={styles.emptyTitle}>No completed challenges</Text>
           <Text style={styles.emptySubtitle}>Finish a challenge to see it here.</Text>
         </View>
       ) : (
@@ -27,39 +27,38 @@ export default function HistoryScreen() {
           keyExtractor={(c) => c.id}
           renderItem={({ item }) => (
             <TouchableOpacity
-              activeOpacity={0.8}
+              style={styles.card}
+              activeOpacity={0.7}
               onPress={() => router.push(`/challenge/${item.id}/summary`)}
             >
-              <Card style={styles.card}>
-                <View style={styles.row}>
-                  <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.date}>{formatDate(item.end_date)}</Text>
+              <View style={styles.cardTop}>
+                <Text style={styles.cardName}>{item.name}</Text>
+                <Text style={styles.cardDate}>{formatDate(item.end_date)}</Text>
+              </View>
+              <View style={styles.cardAmounts}>
+                <View>
+                  <Text style={styles.amountLabel}>Staked</Text>
+                  <Text style={styles.amount}>{formatCurrency(item.stake_amount)}</Text>
                 </View>
-                <View style={styles.amounts}>
+                <View>
+                  <Text style={styles.amountLabel}>Returned</Text>
+                  <Text style={[styles.amount, styles.green]}>
+                    {formatCurrency(item.protected_amount_cents ?? 0)}
+                  </Text>
+                </View>
+                {(item.forfeited_amount_cents ?? 0) > 0 && (
                   <View>
-                    <Text style={styles.amountLabel}>Staked</Text>
-                    <Text style={styles.amount}>{formatCurrency(item.stake_amount)}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.amountLabel}>Returned</Text>
-                    <Text style={[styles.amount, styles.green]}>
-                      {formatCurrency(item.protected_amount_cents ?? 0)}
+                    <Text style={styles.amountLabel}>Forfeited</Text>
+                    <Text style={[styles.amount, styles.red]}>
+                      {formatCurrency(item.forfeited_amount_cents ?? 0)}
                     </Text>
                   </View>
-                  {(item.forfeited_amount_cents ?? 0) > 0 && (
-                    <View>
-                      <Text style={styles.amountLabel}>Forfeited</Text>
-                      <Text style={[styles.amount, styles.red]}>
-                        {formatCurrency(item.forfeited_amount_cents ?? 0)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </Card>
+                )}
+              </View>
             </TouchableOpacity>
           )}
           contentContainerStyle={styles.list}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         />
       )}
     </SafeAreaView>
@@ -67,20 +66,34 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f8f8' },
-  header: { paddingHorizontal: 20, paddingVertical: 16 },
-  title: { fontSize: 28, fontWeight: '800', color: '#1a1a1a' },
+  container: { flex: 1, backgroundColor: colors.bg },
+  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
+  title: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
-  emptySubtitle: { fontSize: 14, color: '#666' },
-  list: { padding: 16 },
-  card: { gap: 16 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  name: { fontSize: 17, fontWeight: '700', color: '#1a1a1a', flex: 1 },
-  date: { fontSize: 13, color: '#999' },
-  amounts: { flexDirection: 'row', gap: 24 },
-  amountLabel: { fontSize: 11, color: '#999', fontWeight: '500' },
-  amount: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  green: { color: '#16a34a' },
-  red: { color: '#dc2626' },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+  emptySubtitle: { fontSize: 14, color: colors.textSecondary },
+  list: { paddingHorizontal: 16, paddingBottom: 32 },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 16,
+  },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardName: { fontSize: 16, fontWeight: '700', color: colors.text },
+  cardDate: { fontSize: 12, color: colors.textSecondary },
+  cardAmounts: { flexDirection: 'row', gap: 28 },
+  amountLabel: {
+    fontSize: 10,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  amount: { fontSize: 16, fontWeight: '700', color: colors.text },
+  green: { color: colors.success },
+  red: { color: colors.danger },
 });

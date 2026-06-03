@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TouchableOpacityProps,
 } from 'react-native';
+import { colors, radius } from '@/constants/theme';
 
 interface ButtonProps extends TouchableOpacityProps {
   title: string;
@@ -13,18 +14,28 @@ interface ButtonProps extends TouchableOpacityProps {
   loading?: boolean;
 }
 
-export function Button({ title, variant = 'primary', loading, disabled, style, ...props }: ButtonProps) {
+export function Button({
+  title,
+  variant = 'primary',
+  loading,
+  disabled,
+  style,
+  ...props
+}: ButtonProps) {
   const isDisabled = disabled || loading;
 
   return (
     <TouchableOpacity
       style={[styles.base, styles[variant], isDisabled && styles.disabled, style]}
       disabled={isDisabled}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'secondary' || variant === 'ghost' ? '#1a1a1a' : '#fff'} />
+        <ActivityIndicator
+          color={variant === 'primary' ? colors.black : colors.text}
+          size="small"
+        />
       ) : (
         <Text style={[styles.text, styles[`${variant}Text`]]}>{title}</Text>
       )}
@@ -34,20 +45,21 @@ export function Button({ title, variant = 'primary', loading, disabled, style, .
 
 const styles = StyleSheet.create({
   base: {
-    height: 52,
-    borderRadius: 12,
+    height: 54,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
-  primary: { backgroundColor: '#1a1a1a' },
-  secondary: { backgroundColor: '#f0f0f0' },
-  danger: { backgroundColor: '#ef4444' },
-  ghost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#e0e0e0' },
-  disabled: { opacity: 0.4 },
-  text: { fontSize: 16, fontWeight: '600' },
-  primaryText: { color: '#fff' },
-  secondaryText: { color: '#1a1a1a' },
-  dangerText: { color: '#fff' },
-  ghostText: { color: '#1a1a1a' },
+  primary: { backgroundColor: colors.white },
+  secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  danger: { backgroundColor: colors.danger },
+  ghost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border },
+  disabled: { opacity: 0.35 },
+
+  text: { fontSize: 15, fontWeight: '600', letterSpacing: 0.1 },
+  primaryText: { color: colors.black },
+  secondaryText: { color: colors.text },
+  dangerText: { color: colors.white },
+  ghostText: { color: colors.text },
 });

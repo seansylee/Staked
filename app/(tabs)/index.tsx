@@ -1,17 +1,9 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ChallengeCard } from '@/components/challenge/ChallengeCard';
+import { colors } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { Challenge } from '@/types';
 
@@ -29,30 +21,30 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Dashboard</Text>
         <TouchableOpacity
-          style={styles.addBtn}
+          style={styles.newBtn}
           onPress={() => router.push('/challenge/new/details')}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
-          <Text style={styles.addBtnText}>+ New</Text>
+          <Text style={styles.newBtnText}>+ New</Text>
         </TouchableOpacity>
       </View>
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#1a1a1a" />
+          <ActivityIndicator color={colors.textSecondary} />
         </View>
       ) : active.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No active challenges</Text>
           <Text style={styles.emptySubtitle}>
-            Create your first challenge and put{'\n'}real money behind your goals.
+            Stake money on your goals.{'\n'}Follow through to get it back.
           </Text>
           <TouchableOpacity
-            style={styles.createBtn}
+            style={styles.emptyBtn}
             onPress={() => router.push('/challenge/new/details')}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
-            <Text style={styles.createBtnText}>Create Challenge</Text>
+            <Text style={styles.emptyBtnText}>Create Challenge</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -62,7 +54,7 @@ export default function DashboardScreen() {
           renderItem={({ item }) => <ChallengeCard challenge={item} />}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         />
       )}
     </SafeAreaView>
@@ -70,34 +62,47 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f8f8' },
+  container: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#f8f8f8',
+    paddingTop: 8,
+    paddingBottom: 16,
   },
-  title: { fontSize: 28, fontWeight: '800', color: '#1a1a1a' },
-  addBtn: {
-    backgroundColor: '#1a1a1a',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  title: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  newBtn: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
   },
-  addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  newBtnText: { color: colors.text, fontWeight: '600', fontSize: 13 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40, gap: 12 },
-  emptyTitle: { fontSize: 22, fontWeight: '700', color: '#1a1a1a', textAlign: 'center' },
-  emptySubtitle: { fontSize: 15, color: '#666', textAlign: 'center', lineHeight: 22 },
-  createBtn: {
+  empty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    gap: 12,
+  },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: colors.text },
+  emptySubtitle: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  emptyBtn: {
     marginTop: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.white,
     paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: 12,
   },
-  createBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  list: { padding: 16 },
+  emptyBtnText: { color: colors.black, fontWeight: '700', fontSize: 15 },
+  list: { paddingHorizontal: 16, paddingBottom: 32 },
 });

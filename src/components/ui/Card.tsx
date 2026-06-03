@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, ViewProps } from 'react-native';
+import { colors, radius } from '@/constants/theme';
 
 export function Card({ style, children, ...props }: ViewProps) {
   return (
@@ -11,13 +12,10 @@ export function Card({ style, children, ...props }: ViewProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 });

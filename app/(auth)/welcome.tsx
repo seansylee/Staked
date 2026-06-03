@@ -1,26 +1,25 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
+import { colors } from '@/constants/theme';
 
 export default function WelcomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.hero}>
-          <Text style={styles.logo}>Staked</Text>
+          <Text style={styles.wordmark}>Staked</Text>
           <Text style={styles.tagline}>
-            Put real money behind your{'\n'}commitments. Follow through.
+            Put real money behind{'\n'}your commitments.
           </Text>
         </View>
 
         <View style={styles.actions}>
-          <Button title="Create Account" onPress={() => router.push('/(auth)/sign-up')} />
-          <Button
-            title="Sign In"
-            variant="ghost"
-            onPress={() => router.push('/(auth)/sign-in')}
-          />
+          <Button title="Get Started" onPress={() => router.push('/(auth)/sign-up')} />
+          <TouchableOpacity onPress={() => router.push('/(auth)/sign-in')} style={styles.signInBtn}>
+            <Text style={styles.signInText}>Sign In</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -28,16 +27,40 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: colors.bg },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
+    paddingHorizontal: 28,
     paddingBottom: 40,
-    paddingTop: 80,
+    justifyContent: 'space-between',
   },
-  hero: { gap: 16 },
-  logo: { fontSize: 48, fontWeight: '800', color: '#1a1a1a', letterSpacing: -2 },
-  tagline: { fontSize: 20, color: '#555', lineHeight: 30 },
+  hero: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: 64,
+    gap: 16,
+  },
+  wordmark: {
+    fontSize: 64,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -3,
+  },
+  tagline: {
+    fontSize: 22,
+    color: colors.textSecondary,
+    lineHeight: 32,
+    fontWeight: '400',
+  },
   actions: { gap: 12 },
+  signInBtn: {
+    height: 54,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  signInText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
 });

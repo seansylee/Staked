@@ -1,13 +1,12 @@
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { Challenge } from '@/types';
-import { daysRemainingForChallenge } from '@/utils/protection';
-import { computeProtection } from '@/utils/protection';
 import { formatCurrency, pluralize } from '@/utils/formatting';
+import { computeProtection, daysRemainingForChallenge } from '@/utils/protection';
 
 interface ChallengeCardProps {
   challenge: Challenge;
@@ -29,58 +28,65 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
 
   return (
     <TouchableOpacity
-      activeOpacity={0.8}
+      style={styles.card}
+      activeOpacity={0.7}
       onPress={() => router.push(`/challenge/${challenge.id}`)}
     >
-      <Card style={styles.card}>
-        <View style={styles.header}>
-          <Text style={styles.name}>{challenge.name}</Text>
-          <Text style={styles.daysLeft}>{pluralize(daysLeft, 'day')} left</Text>
-        </View>
+      <View style={styles.top}>
+        <Text style={styles.name}>{challenge.name}</Text>
+        <Text style={styles.days}>{pluralize(daysLeft, 'day')} left</Text>
+      </View>
 
-        <View style={styles.stakeRow}>
-          <View style={styles.stakeStat}>
-            <Text style={styles.statLabel}>Staked</Text>
-            <Text style={styles.statValue}>{formatCurrency(challenge.stake_amount)}</Text>
-          </View>
-          <View style={styles.stakeStat}>
-            <Text style={styles.statLabel}>Protected</Text>
-            <Text style={[styles.statValue, styles.green]}>
-              {formatCurrency(summary.protectedFunds)}
-            </Text>
-          </View>
-          {summary.fundsAtRisk > 0 && (
-            <View style={styles.stakeStat}>
-              <Text style={styles.statLabel}>At Risk</Text>
-              <Text style={[styles.statValue, styles.red]}>
-                {formatCurrency(summary.fundsAtRisk)}
-              </Text>
-            </View>
-          )}
-        </View>
+      <Text style={styles.amount}>{formatCurrency(summary.protectedFunds)}</Text>
+      <Text style={styles.amountLabel}>protected</Text>
 
-        <View style={styles.progressSection}>
-          <Text style={styles.progressLabel}>
-            Day {summary.elapsedDays} of {summary.totalDays}
-          </Text>
-          <ProgressBar progress={summary.completionPercent / 100} />
-        </View>
-      </Card>
+      <View style={styles.progressSection}>
+        <ProgressBar
+          progress={summary.completionPercent / 100}
+          height={2}
+          color={colors.white}
+          backgroundColor={colors.border}
+        />
+      </View>
+
+      {summary.fundsAtRisk > 0 && (
+        <Text style={styles.atRisk}>{formatCurrency(summary.fundsAtRisk)} at risk</Text>
+      )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  name: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', flex: 1 },
-  daysLeft: { fontSize: 13, color: '#666', marginLeft: 8 },
-  stakeRow: { flexDirection: 'row', gap: 24 },
-  stakeStat: { gap: 2 },
-  statLabel: { fontSize: 12, color: '#999', fontWeight: '500' },
-  statValue: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  green: { color: '#16a34a' },
-  red: { color: '#dc2626' },
-  progressSection: { gap: 6 },
-  progressLabel: { fontSize: 12, color: '#999' },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 4,
+  },
+  top: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  name: { fontSize: 16, fontWeight: '600', color: colors.text },
+  days: { fontSize: 12, color: colors.textSecondary },
+  amount: { fontSize: 36, fontWeight: '800', color: colors.text, letterSpacing: -1.5 },
+  amountLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    fontWeight: '500',
+    marginBottom: 14,
+  },
+  progressSection: {},
+  atRisk: {
+    fontSize: 12,
+    color: colors.danger,
+    marginTop: 8,
+    fontWeight: '500',
+  },
 });

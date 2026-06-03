@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { colors } from '@/constants/theme';
 import { ProtectionSummary } from '@/types';
 import { formatCurrency } from '@/utils/formatting';
 
@@ -10,56 +10,84 @@ interface StakeSummaryPanelProps {
 }
 
 export function StakeSummaryPanel({ summary }: StakeSummaryPanelProps) {
-  const protectedPercent = summary.originalStake > 0
+  const protectedPct = summary.originalStake > 0
     ? summary.protectedFunds / summary.originalStake
     : 1;
 
   return (
-    <Card>
-      <Text style={styles.title}>Vault</Text>
-
-      <View style={styles.mainAmount}>
-        <Text style={styles.protectedLabel}>Protected</Text>
-        <Text style={styles.protectedAmount}>{formatCurrency(summary.protectedFunds)}</Text>
-      </View>
+    <View style={styles.container}>
+      <Text style={styles.label}>Protected</Text>
+      <Text style={styles.bigAmount}>{formatCurrency(summary.protectedFunds)}</Text>
 
       <ProgressBar
-        progress={protectedPercent}
-        height={8}
-        color="#16a34a"
-        backgroundColor="#fee2e2"
+        progress={protectedPct}
+        height={3}
+        color={colors.success}
+        backgroundColor={colors.border}
       />
 
       <View style={styles.row}>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Original Stake</Text>
-          <Text style={styles.statValue}>{formatCurrency(summary.originalStake)}</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>At Risk</Text>
-          <Text style={[styles.statValue, summary.fundsAtRisk > 0 && styles.red]}>
-            {formatCurrency(summary.fundsAtRisk)}
-          </Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Progress</Text>
-          <Text style={styles.statValue}>
-            {summary.elapsedDays}/{summary.totalDays}d
-          </Text>
-        </View>
+        <Stat label="Staked" value={formatCurrency(summary.originalStake)} />
+        <Stat
+          label="At Risk"
+          value={formatCurrency(summary.fundsAtRisk)}
+          valueColor={summary.fundsAtRisk > 0 ? colors.danger : colors.textSecondary}
+        />
+        <Stat label="Day" value={`${summary.elapsedDays} / ${summary.totalDays}`} />
       </View>
-    </Card>
+    </View>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  valueColor = colors.text,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+}) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { color: valueColor }]}>{value}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 13, fontWeight: '600', color: '#999', marginBottom: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
-  mainAmount: { marginBottom: 12 },
-  protectedLabel: { fontSize: 13, color: '#16a34a', fontWeight: '600', marginBottom: 2 },
-  protectedAmount: { fontSize: 36, fontWeight: '800', color: '#1a1a1a', letterSpacing: -1 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
-  stat: { gap: 2 },
-  statLabel: { fontSize: 11, color: '#999', fontWeight: '500' },
-  statValue: { fontSize: 15, fontWeight: '700', color: '#1a1a1a' },
-  red: { color: '#dc2626' },
+  container: { gap: 16 },
+  label: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.success,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  bigAmount: {
+    fontSize: 52,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -2,
+    marginTop: -4,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 28,
+    paddingTop: 4,
+  },
+  stat: { gap: 3 },
+  statLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontWeight: '500',
+  },
+  statValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
 });

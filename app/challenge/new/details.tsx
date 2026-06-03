@@ -1,29 +1,18 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { formatCurrency } from '@/utils/formatting';
 
 const schema = z.object({
-  name: z.string().min(1, 'Challenge name is required').max(60),
-  stake_dollars: z.coerce
-    .number()
-    .min(50, 'Minimum stake is $50')
-    .max(2500, 'Maximum stake is $2,500'),
+  name: z.string().min(1, 'Name is required').max(60),
+  stake_dollars: z.coerce.number().min(50, 'Minimum $50').max(2500, 'Maximum $2,500'),
   duration_days: z.coerce.number().min(1).max(365),
 });
 
@@ -62,13 +51,10 @@ export default function ChallengeDetailsScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
 
-          <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>Step 1 of 3</Text>
-          </View>
-
+          <Text style={styles.stepText}>1 / 3</Text>
           <Text style={styles.title}>Challenge Details</Text>
 
           <View style={styles.form}>
@@ -77,7 +63,7 @@ export default function ChallengeDetailsScreen() {
               name="name"
               render={({ field: { onChange, value } }) => (
                 <Input
-                  label="Challenge Name"
+                  label="Name"
                   placeholder="e.g. Summer Fitness"
                   value={value}
                   onChangeText={onChange}
@@ -86,17 +72,17 @@ export default function ChallengeDetailsScreen() {
               )}
             />
 
-            <View style={styles.fieldGroup}>
+            <View style={styles.field}>
               <Text style={styles.fieldLabel}>Stake Amount</Text>
               <View style={styles.presets}>
-                {STAKE_PRESETS.map((amount) => (
+                {STAKE_PRESETS.map((a) => (
                   <TouchableOpacity
-                    key={amount}
-                    style={[styles.preset, stakeDollars === amount && styles.presetActive]}
-                    onPress={() => setValue('stake_dollars', amount)}
+                    key={a}
+                    style={[styles.pill, stakeDollars === a && styles.pillActive]}
+                    onPress={() => setValue('stake_dollars', a)}
                   >
-                    <Text style={[styles.presetText, stakeDollars === amount && styles.presetActiveText]}>
-                      ${amount}
+                    <Text style={[styles.pillText, stakeDollars === a && styles.pillActiveText]}>
+                      ${a}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -116,17 +102,17 @@ export default function ChallengeDetailsScreen() {
               />
             </View>
 
-            <View style={styles.fieldGroup}>
+            <View style={styles.field}>
               <Text style={styles.fieldLabel}>Duration</Text>
               <View style={styles.presets}>
-                {DURATION_PRESETS.map((days) => (
+                {DURATION_PRESETS.map((d) => (
                   <TouchableOpacity
-                    key={days}
-                    style={[styles.preset, durationDays === days && styles.presetActive]}
-                    onPress={() => setValue('duration_days', days)}
+                    key={d}
+                    style={[styles.pill, durationDays === d && styles.pillActive]}
+                    onPress={() => setValue('duration_days', d)}
                   >
-                    <Text style={[styles.presetText, durationDays === days && styles.presetActiveText]}>
-                      {days}d
+                    <Text style={[styles.pillText, durationDays === d && styles.pillActiveText]}>
+                      {d}d
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -149,11 +135,13 @@ export default function ChallengeDetailsScreen() {
             {stakeDollars > 0 && durationDays > 0 && (
               <View style={styles.preview}>
                 <Text style={styles.previewLabel}>Daily protection value</Text>
-                <Text style={styles.previewAmount}>{formatCurrency(Math.round(dailyProtection * 100))}/day</Text>
+                <Text style={styles.previewValue}>
+                  {formatCurrency(Math.round(dailyProtection * 100))}/day
+                </Text>
               </View>
             )}
 
-            <Button title="Next: Add Goals" onPress={handleSubmit(onSubmit)} style={styles.nextBtn} />
+            <Button title="Next: Goals →" onPress={handleSubmit(onSubmit)} />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -162,36 +150,51 @@ export default function ChallengeDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  scroll: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 48 },
-  back: { marginBottom: 16 },
-  backText: { fontSize: 16, color: '#555' },
-  stepIndicator: { marginBottom: 8 },
-  stepText: { fontSize: 13, color: '#999', fontWeight: '500' },
-  title: { fontSize: 28, fontWeight: '800', color: '#1a1a1a', marginBottom: 32 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 48 },
+  back: { paddingVertical: 12 },
+  backText: { fontSize: 22, color: colors.textSecondary },
+  stepText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  title: { fontSize: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.8, marginBottom: 32 },
   form: { gap: 28 },
-  fieldGroup: { gap: 12 },
-  fieldLabel: { fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
+  field: { gap: 12 },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
   presets: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  preset: {
+  pill: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  presetActive: { backgroundColor: '#1a1a1a', borderColor: '#1a1a1a' },
-  presetText: { fontSize: 14, color: '#555', fontWeight: '500' },
-  presetActiveText: { color: '#fff' },
+  pillActive: { backgroundColor: colors.white, borderColor: colors.white },
+  pillText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
+  pillActiveText: { color: colors.black },
   preview: {
-    backgroundColor: '#f8f8f8',
-    borderRadius: 12,
-    padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  previewLabel: { fontSize: 14, color: '#555' },
-  previewAmount: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  nextBtn: {},
+  previewLabel: { fontSize: 13, color: colors.textSecondary },
+  previewValue: { fontSize: 15, fontWeight: '700', color: colors.text },
 });

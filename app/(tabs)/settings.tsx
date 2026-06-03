@@ -1,14 +1,14 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Button } from '@/components/ui/Button';
+import { colors, radius } from '@/constants/theme';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export default function SettingsScreen() {
   const { profile, signOut } = useAuthStore();
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+    Alert.alert('Sign Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign Out',
@@ -44,33 +44,48 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Button title="Sign Out" variant="danger" onPress={handleSignOut} style={styles.signOut} />
+        <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn} activeOpacity={0.7}>
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f8f8' },
-  header: { paddingHorizontal: 20, paddingVertical: 16 },
-  title: { fontSize: 28, fontWeight: '800', color: '#1a1a1a' },
-  content: { flex: 1, paddingHorizontal: 20, gap: 32 },
-  section: { gap: 8 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
+  title: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  content: { paddingHorizontal: 20, gap: 32 },
+  section: { gap: 10 },
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#999',
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  rowLabel: { fontSize: 15, color: '#1a1a1a' },
-  rowValue: { fontSize: 15, color: '#666' },
-  signOut: { marginTop: 8 },
+  rowLabel: { fontSize: 15, color: colors.text },
+  rowValue: { fontSize: 14, color: colors.textSecondary },
+  signOutBtn: {
+    marginTop: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.dangerBg,
+    paddingVertical: 14,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  signOutText: { fontSize: 15, fontWeight: '600', color: colors.danger },
 });

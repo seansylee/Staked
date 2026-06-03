@@ -5,12 +5,12 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { posthog } from '@/lib/posthog';
-import { Card } from '@/components/ui/Card';
 import { confirmChallengeStart, createPaymentIntent } from '@/api/payments';
+import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { formatCurrency } from '@/utils/formatting';
 
-const PLATFORM_FEE_CENTS = 300; // $3.00
+const PLATFORM_FEE_CENTS = 300;
 
 export default function PaymentScreen() {
   const { draft, clearDraft, fetchChallenges } = useChallengeStore();
@@ -28,17 +28,14 @@ export default function PaymentScreen() {
     setLoading(true);
     try {
       const clientSecret = await createPaymentIntent(totalCents);
-
       const { error: initError } = await initPaymentSheet({
         paymentIntentClientSecret: clientSecret,
         merchantDisplayName: 'Staked',
         returnURL: 'staked://payment-complete',
       });
-
       if (initError) throw new Error(initError.message);
 
       const { error: presentError } = await presentPaymentSheet();
-
       if (presentError) {
         if (presentError.code !== 'Canceled') {
           posthog.capture('payment_failed', { error_code: presentError.code });
@@ -47,7 +44,6 @@ export default function PaymentScreen() {
         return;
       }
 
-      // Payment succeeded — extract payment intent ID from client secret
       const paymentIntentId = clientSecret.split('_secret_')[0];
       await confirmChallengeStart(paymentIntentId, draft);
       posthog.capture('challenge_created', {
@@ -57,7 +53,6 @@ export default function PaymentScreen() {
       });
       await fetchChallenges();
       clearDraft();
-
       router.replace('/(tabs)');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
@@ -69,62 +64,38 @@ export default function PaymentScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <View style={styles.stepIndicator}>
-          <Text style={styles.stepText}>Step 3 of 3</Text>
-        </View>
-
+        <Text style={styles.stepText}>3 / 3</Text>
         <Text style={styles.title}>Review & Pay</Text>
 
-        <Card style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Challenge</Text>
-            <Text style={styles.summaryValue}>{draft.name}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Duration</Text>
-            <Text style={styles.summaryValue}>{draft.duration_days} days</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Goals</Text>
-            <Text style={styles.summaryValue}>{draft.goals.length}</Text>
-          </View>
+        <View style={styles.card}>
+          <SummaryRow label="Challenge" value={draft.name} />
+          <SummaryRow label="Duration" value={`${draft.duration_days} days`} />
+          <SummaryRow label="Goals" value={`${draft.goals.length}`} />
+        </View>
 
-          <View style={styles.divider} />
-
+        <View style={styles.card}>
           {draft.goals.map((g, i) => (
-            <Text key={i} style={styles.goalItem}>
-              • {g.name} — {g.target_count}x/{g.window}
+            <Text key={i} style={styles.goalLine}>
+              {g.name}  ·  {g.target_count}×/{g.window}
             </Text>
           ))}
-        </Card>
-
-        <Card style={styles.priceCard}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Stake</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(draft.stake_amount_cents)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Platform fee</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(PLATFORM_FEE_CENTS)}</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.summaryRow}>
-            <Text style={styles.totalLabel}>Total charged today</Text>
-            <Text style={styles.totalValue}>{formatCurrency(totalCents)}</Text>
-          </View>
-        </Card>
-
-        <View style={styles.note}>
-          <Text style={styles.noteText}>
-            Your stake is locked for {draft.duration_days} days. Protected funds are returned
-            when the challenge ends.
-          </Text>
         </View>
+
+        <View style={styles.card}>
+          <SummaryRow label="Stake" value={formatCurrency(draft.stake_amount_cents)} />
+          <SummaryRow label="Platform fee" value={formatCurrency(PLATFORM_FEE_CENTS)} />
+          <View style={styles.divider} />
+          <SummaryRow label="Total" value={formatCurrency(totalCents)} large />
+        </View>
+
+        <Text style={styles.note}>
+          Stake is locked for {draft.duration_days} days. Protected funds are returned when the challenge ends.
+        </Text>
 
         <Button
           title={`Pay ${formatCurrency(totalCents)} & Start`}
@@ -136,23 +107,58 @@ export default function PaymentScreen() {
   );
 }
 
+function SummaryRow({
+  label,
+  value,
+  large = false,
+}: {
+  label: string;
+  value: string;
+  large?: boolean;
+}) {
+  return (
+    <View style={rowStyles.row}>
+      <Text style={rowStyles.label}>{label}</Text>
+      <Text style={[rowStyles.value, large && rowStyles.valueLarge]}>{value}</Text>
+    </View>
+  );
+}
+
+const rowStyles = StyleSheet.create({
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  label: { fontSize: 14, color: colors.textSecondary },
+  value: { fontSize: 14, fontWeight: '600', color: colors.text },
+  valueLarge: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+});
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  scroll: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 48, gap: 16 },
-  back: {},
-  backText: { fontSize: 16, color: '#555' },
-  stepIndicator: {},
-  stepText: { fontSize: 13, color: '#999', fontWeight: '500' },
-  title: { fontSize: 28, fontWeight: '800', color: '#1a1a1a' },
-  summaryCard: { gap: 12 },
-  priceCard: { gap: 12 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  summaryLabel: { fontSize: 14, color: '#666' },
-  summaryValue: { fontSize: 15, fontWeight: '600', color: '#1a1a1a', textAlign: 'right', flex: 1, marginLeft: 16 },
-  divider: { height: 1, backgroundColor: '#f0f0f0' },
-  goalItem: { fontSize: 14, color: '#555', lineHeight: 22 },
-  totalLabel: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  totalValue: { fontSize: 20, fontWeight: '800', color: '#1a1a1a' },
-  note: { backgroundColor: '#f8f8f8', borderRadius: 12, padding: 14 },
-  noteText: { fontSize: 13, color: '#666', lineHeight: 20 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 48, gap: 12 },
+  back: { paddingVertical: 12 },
+  backText: { fontSize: 22, color: colors.textSecondary },
+  stepText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  title: { fontSize: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.8, marginBottom: 8 },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 12,
+  },
+  goalLine: { fontSize: 14, color: colors.textSecondary },
+  divider: { height: 1, backgroundColor: colors.border },
+  note: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 18,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
 });

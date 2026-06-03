@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { colors } from '@/constants/theme';
 import { GoalProgress } from '@/types';
 
 interface GoalRowProps {
@@ -11,34 +11,33 @@ interface GoalRowProps {
 
 export function GoalRow({ progress, onCheckIn, loading }: GoalRowProps) {
   const { goal, currentCount, targetCount, windowLabel, isCompleted } = progress;
-  const ratio = Math.min(currentCount / targetCount, 1);
 
   return (
     <View style={styles.row}>
       <View style={styles.info}>
         <Text style={styles.name}>{goal.name}</Text>
-        <View style={styles.progressRow}>
+        <Text style={styles.progress}>
           <Text style={[styles.count, isCompleted && styles.countDone]}>
-            {currentCount} / {targetCount} {windowLabel}
+            {currentCount}/{targetCount}
           </Text>
-          <ProgressBar
-            progress={ratio}
-            height={4}
-            color={isCompleted ? '#16a34a' : '#1a1a1a'}
-          />
-        </View>
+          {'  '}
+          <Text style={styles.window}>{windowLabel}</Text>
+        </Text>
       </View>
 
       <TouchableOpacity
-        style={[styles.checkInBtn, isCompleted && styles.checkInBtnDone]}
+        style={[styles.btn, isCompleted && styles.btnDone]}
         onPress={() => onCheckIn(goal.id)}
         disabled={loading}
-        activeOpacity={0.7}
+        activeOpacity={0.6}
       >
         {loading ? (
-          <ActivityIndicator color={isCompleted ? '#16a34a' : '#fff'} size="small" />
+          <ActivityIndicator
+            color={isCompleted ? colors.success : colors.black}
+            size="small"
+          />
         ) : (
-          <Text style={[styles.checkInText, isCompleted && styles.checkInTextDone]}>
+          <Text style={[styles.btnText, isCompleted && styles.btnTextDone]}>
             {isCompleted ? '✓' : '+1'}
           </Text>
         )}
@@ -51,25 +50,26 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f0f0f0',
-    gap: 12,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: 16,
   },
-  info: { flex: 1, gap: 8 },
-  name: { fontSize: 16, fontWeight: '600', color: '#1a1a1a' },
-  progressRow: { gap: 4 },
-  count: { fontSize: 13, color: '#666' },
-  countDone: { color: '#16a34a' },
-  checkInBtn: {
+  info: { flex: 1, gap: 5 },
+  name: { fontSize: 15, fontWeight: '600', color: colors.text },
+  progress: {},
+  count: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+  countDone: { color: colors.success },
+  window: { fontSize: 13, color: colors.textMuted },
+  btn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  checkInBtnDone: { backgroundColor: '#dcfce7' },
-  checkInText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  checkInTextDone: { color: '#16a34a' },
+  btnDone: { backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.success },
+  btnText: { color: colors.black, fontWeight: '700', fontSize: 14 },
+  btnTextDone: { color: colors.success, fontSize: 16 },
 });

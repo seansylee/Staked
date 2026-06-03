@@ -2,7 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { formatCurrency, formatDate } from '@/utils/formatting';
 
@@ -10,7 +10,6 @@ export default function CompletionSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const challenges = useChallengeStore((s) => s.challenges);
   const goalsMap = useChallengeStore((s) => s.goalsMap);
-  const checkInsMap = useChallengeStore((s) => s.checkInsMap);
 
   const challenge = challenges.find((c) => c.id === id);
   const goals = goalsMap[id] ?? [];
@@ -19,7 +18,7 @@ export default function CompletionSummaryScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text style={styles.notFound}>No summary available</Text>
+          <Text style={styles.muted}>No summary available</Text>
         </View>
       </SafeAreaView>
     );
@@ -35,51 +34,42 @@ export default function CompletionSummaryScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
-          <Text style={styles.emoji}>{successRate >= 80 ? '🏆' : successRate >= 50 ? '💪' : '📈'}</Text>
-          <Text style={styles.heroTitle}>Challenge Complete</Text>
-          <Text style={styles.heroSubtitle}>{challenge.name}</Text>
+          <Text style={styles.heroLabel}>Complete</Text>
+          <Text style={styles.heroName}>{challenge.name}</Text>
+          <Text style={styles.heroRate}>{successRate}% protected</Text>
         </View>
 
-        <Card style={styles.summaryCard}>
-          <SummaryRow label="Original Stake" value={formatCurrency(challenge.stake_amount)} />
-          <SummaryRow
-            label="Protected Funds"
-            value={formatCurrency(protectedCents)}
-            valueColor="#16a34a"
-          />
+        <View style={styles.card}>
+          <Row label="Original Stake" value={formatCurrency(challenge.stake_amount)} />
+          <Row label="Protected" value={formatCurrency(protectedCents)} valueColor={colors.success} />
           {forfeitedCents > 0 && (
-            <SummaryRow
-              label="Forfeited"
-              value={formatCurrency(forfeitedCents)}
-              valueColor="#dc2626"
-            />
+            <Row label="Forfeited" value={formatCurrency(forfeitedCents)} valueColor={colors.danger} />
           )}
           <View style={styles.divider} />
-          <SummaryRow
+          <Row
             label="Returned to you"
             value={formatCurrency(protectedCents)}
-            valueColor="#16a34a"
+            valueColor={colors.success}
             large
           />
-        </Card>
+        </View>
 
-        <Card style={styles.datesCard}>
-          <SummaryRow label="Start Date" value={formatDate(challenge.start_date)} />
-          <SummaryRow label="End Date" value={formatDate(challenge.end_date)} />
-          <SummaryRow label="Duration" value={`${challenge.duration_days} days`} />
-          <SummaryRow label="Success Rate" value={`${successRate}%`} />
-        </Card>
+        <View style={styles.card}>
+          <Row label="Start" value={formatDate(challenge.start_date)} />
+          <Row label="End" value={formatDate(challenge.end_date)} />
+          <Row label="Duration" value={`${challenge.duration_days} days`} />
+        </View>
 
         {goals.length > 0 && (
-          <Card>
-            <Text style={styles.sectionTitle}>Goals</Text>
-            {goals.map((goal) => (
-              <View key={goal.id} style={styles.goalRow}>
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>Goals</Text>
+            {goals.map((goal, i) => (
+              <View key={goal.id} style={[styles.goalRow, i < goals.length - 1 && styles.goalRowBorder]}>
                 <Text style={styles.goalName}>{goal.name}</Text>
-                <Text style={styles.goalTarget}>{goal.target_count}x/{goal.window}</Text>
+                <Text style={styles.goalTarget}>{goal.target_count}×/{goal.window}</Text>
               </View>
             ))}
-          </Card>
+          </View>
         )}
 
         <Button title="Back to Dashboard" onPress={() => router.replace('/(tabs)')} />
@@ -88,10 +78,10 @@ export default function CompletionSummaryScreen() {
   );
 }
 
-function SummaryRow({
+function Row({
   label,
   value,
-  valueColor = '#1a1a1a',
+  valueColor = colors.text,
   large = false,
 }: {
   label: string;
@@ -100,34 +90,57 @@ function SummaryRow({
   large?: boolean;
 }) {
   return (
-    <View style={styles.row}>
-      <Text style={[styles.rowLabel, large && styles.rowLabelLarge]}>{label}</Text>
-      <Text style={[styles.rowValue, { color: valueColor }, large && styles.rowValueLarge]}>
+    <View style={rowStyles.row}>
+      <Text style={[rowStyles.label, large && rowStyles.labelLarge]}>{label}</Text>
+      <Text style={[rowStyles.value, { color: valueColor }, large && rowStyles.valueLarge]}>
         {value}
       </Text>
     </View>
   );
 }
 
+const rowStyles = StyleSheet.create({
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  label: { fontSize: 14, color: colors.textSecondary },
+  labelLarge: { fontSize: 15, fontWeight: '600', color: colors.text },
+  value: { fontSize: 15, fontWeight: '600' },
+  valueLarge: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+});
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f8f8' },
-  scroll: { paddingHorizontal: 20, paddingTop: 32, paddingBottom: 48, gap: 16 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingHorizontal: 20, paddingTop: 40, paddingBottom: 48, gap: 12 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  notFound: { fontSize: 16, color: '#666' },
-  hero: { alignItems: 'center', gap: 8, paddingVertical: 16 },
-  emoji: { fontSize: 56 },
-  heroTitle: { fontSize: 28, fontWeight: '800', color: '#1a1a1a' },
-  heroSubtitle: { fontSize: 16, color: '#666' },
-  summaryCard: { gap: 12 },
-  datesCard: { gap: 12 },
-  divider: { height: 1, backgroundColor: '#f0f0f0' },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#999', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowLabel: { fontSize: 14, color: '#666' },
-  rowLabelLarge: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  rowValue: { fontSize: 15, fontWeight: '600' },
-  rowValueLarge: { fontSize: 22, fontWeight: '800' },
-  goalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-  goalName: { fontSize: 15, color: '#1a1a1a', fontWeight: '500' },
-  goalTarget: { fontSize: 14, color: '#666' },
+  muted: { color: colors.textSecondary },
+  hero: { paddingBottom: 24, gap: 6 },
+  heroLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.success,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  heroName: { fontSize: 34, fontWeight: '800', color: colors.text, letterSpacing: -1 },
+  heroRate: { fontSize: 16, color: colors.textSecondary },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 10,
+  },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 4 },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  goalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
+  goalRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  goalName: { fontSize: 15, color: colors.text, fontWeight: '500' },
+  goalTarget: { fontSize: 13, color: colors.textSecondary },
 });

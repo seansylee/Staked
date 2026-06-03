@@ -8,6 +8,7 @@ import { registerForPushNotifications } from '@/lib/notifications';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { colors } from '@/constants/theme';
 import { useAuthStore } from '@/store/useAuthStore';
 
 const schema = z.object({
@@ -29,7 +30,7 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       await signIn(data.email, data.password);
-      registerForPushNotifications(); // fire and forget
+      registerForPushNotifications();
       router.replace('/(tabs)');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Sign in failed. Please try again.';
@@ -41,16 +42,15 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.kav}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>Sign in to check your stake.</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>Sign in to check your stake.</Text>
+        </View>
 
         <View style={styles.form}>
           <Controller
@@ -81,18 +81,13 @@ export default function SignInScreen() {
               />
             )}
           />
-
-          <Button
-            title="Sign In"
-            onPress={handleSubmit(onSubmit)}
-            loading={loading}
-            style={styles.submitBtn}
-          />
+          <Button title="Sign In" onPress={handleSubmit(onSubmit)} loading={loading} style={styles.btn} />
         </View>
 
-        <TouchableOpacity onPress={() => router.replace('/(auth)/sign-up')}>
+        <TouchableOpacity onPress={() => router.replace('/(auth)/sign-up')} style={styles.switchRow}>
           <Text style={styles.switchText}>
-            No account yet? <Text style={styles.switchLink}>Create Account</Text>
+            No account?{' '}
+            <Text style={styles.switchLink}>Create one</Text>
           </Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>
@@ -101,14 +96,16 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
-  back: { marginBottom: 32 },
-  backText: { fontSize: 16, color: '#555' },
-  title: { fontSize: 32, fontWeight: '800', color: '#1a1a1a', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#666', marginBottom: 40 },
-  form: { gap: 20, marginBottom: 32 },
-  submitBtn: { marginTop: 8 },
-  switchText: { textAlign: 'center', color: '#666', fontSize: 14 },
-  switchLink: { color: '#1a1a1a', fontWeight: '600' },
+  container: { flex: 1, backgroundColor: colors.bg },
+  kav: { flex: 1, paddingHorizontal: 28 },
+  back: { paddingTop: 8, paddingBottom: 32 },
+  backText: { fontSize: 22, color: colors.textSecondary },
+  header: { gap: 8, marginBottom: 40 },
+  title: { fontSize: 32, fontWeight: '800', color: colors.text, letterSpacing: -1 },
+  subtitle: { fontSize: 16, color: colors.textSecondary },
+  form: { gap: 20 },
+  btn: { marginTop: 8 },
+  switchRow: { marginTop: 28, alignItems: 'center' },
+  switchText: { fontSize: 14, color: colors.textSecondary },
+  switchLink: { color: colors.text, fontWeight: '600' },
 });
