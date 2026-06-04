@@ -66,7 +66,7 @@ export default function CompletionSummaryScreen() {
             {goals.map((goal, i) => (
               <View key={goal.id} style={[styles.goalRow, i < goals.length - 1 && styles.goalRowBorder]}>
                 <Text style={styles.goalName}>{goal.name}</Text>
-                <Text style={styles.goalTarget}>{goal.target_count}×/{goal.window}</Text>
+                <Text style={styles.goalTarget}>{goal.target_count}×/{goal.goal_window}</Text>
               </View>
             ))}
           </View>

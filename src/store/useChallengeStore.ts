@@ -139,7 +139,7 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
     if (!goal) return;
 
     const now = new Date();
-    const windowKey = getWindowKey(now, goal.window);
+    const windowKey = getWindowKey(now, goal.goal_window);
 
     // Optimistic update
     const optimisticCheckIn: CheckIn = {

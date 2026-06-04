@@ -24,7 +24,7 @@ const makeGoal = (override: Partial<Goal> = {}): Goal => ({
   challenge_id: 'c1',
   name: 'Gym',
   target_count: 3,
-  window: 'weekly',
+  goal_window: 'weekly',
   created_at: '2024-01-01T00:00:00Z',
   ...override,
 });
@@ -77,7 +77,7 @@ describe('computeProtection', () => {
 
   it('returns proportional amount for partial completion', () => {
     const challenge = makeChallenge({ duration_days: 7, end_date: '2024-01-07' });
-    const goal = makeGoal({ window: 'daily', target_count: 1 });
+    const goal = makeGoal({ goal_window: 'daily', target_count: 1 });
     // 6 days elapsed, 3 completed, ref = 2024-01-07
     const dailyRef = new Date('2024-01-07T12:00:00Z');
     const checkIns: CheckIn[] = [
@@ -94,7 +94,7 @@ describe('computeProtection', () => {
 
   it('does not penalize in-flight current period', () => {
     const challenge = makeChallenge();
-    const goal = makeGoal({ window: 'weekly', target_count: 3 });
+    const goal = makeGoal({ goal_window: 'weekly', target_count: 3 });
     // ref = Monday of current week → 0 elapsed weeks
     const mondayRef = new Date('2024-01-01T12:00:00Z'); // Jan 1 is Monday
     const summary = computeProtection(challenge, [goal], [], mondayRef);
@@ -105,8 +105,8 @@ describe('computeProtection', () => {
 
   it('divides penalty equally across multiple goals', () => {
     const challenge = makeChallenge();
-    const goal1 = makeGoal({ id: 'g1', window: 'daily', target_count: 1 });
-    const goal2 = makeGoal({ id: 'g2', window: 'daily', target_count: 1 });
+    const goal1 = makeGoal({ id: 'g1', goal_window: 'daily', target_count: 1 });
+    const goal2 = makeGoal({ id: 'g2', goal_window: 'daily', target_count: 1 });
     const dailyRef = new Date('2024-01-08T12:00:00Z');
     const goal1CheckIns: CheckIn[] = [
       makeCheckIn('g1', '2024-01-01', 'ci1'),

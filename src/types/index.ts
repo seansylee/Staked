@@ -33,7 +33,7 @@ export interface Goal {
   challenge_id: string;
   name: string;
   target_count: number;
-  window: Window;
+  goal_window: Window;
   created_at: string;
 }
 
@@ -62,7 +62,7 @@ export interface Payment {
 export interface GoalDraft {
   name: string;
   target_count: number;
-  window: Window;
+  goal_window: Window;
 }
 
 export interface ChallengeDraft {

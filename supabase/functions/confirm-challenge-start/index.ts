@@ -73,11 +73,11 @@ Deno.serve(async (req) => {
   // Create goal rows
   if (draftChallenge.goals?.length > 0) {
     await supabase.from('goals').insert(
-      draftChallenge.goals.map((g: { name: string; target_count: number; window: string }) => ({
+      draftChallenge.goals.map((g: { name: string; target_count: number; goal_window: string }) => ({
         challenge_id: challenge.id,
         name: g.name,
         target_count: g.target_count,
-        window: g.window,
+        goal_window: g.goal_window,
       }))
     );
   }

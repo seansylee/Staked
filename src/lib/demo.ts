@@ -52,9 +52,9 @@ export const DEMO_CHALLENGES: Challenge[] = [
 ];
 
 export const DEMO_GOALS: Goal[] = [
-  { id: 'g1', challenge_id: 'c1', name: 'Gym', target_count: 3, window: 'weekly', created_at: daysAgo(28) },
-  { id: 'g2', challenge_id: 'c1', name: 'Run', target_count: 2, window: 'weekly', created_at: daysAgo(28) },
-  { id: 'g3', challenge_id: 'c2', name: 'Deep Work Session', target_count: 1, window: 'daily', created_at: daysAgo(10) },
+  { id: 'g1', challenge_id: 'c1', name: 'Gym', target_count: 3, goal_window: 'weekly', created_at: daysAgo(28) },
+  { id: 'g2', challenge_id: 'c1', name: 'Run', target_count: 2, goal_window: 'weekly', created_at: daysAgo(28) },
+  { id: 'g3', challenge_id: 'c2', name: 'Deep Work Session', target_count: 1, goal_window: 'daily', created_at: daysAgo(10) },
 ];
 
 // Simulate a mostly-good performance: gym 2/3 this week, run 2/2, deep work 1/1 today

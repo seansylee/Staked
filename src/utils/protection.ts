@@ -58,14 +58,14 @@ export function computeProtection(
   let totalMissedDayEquivalents = 0;
 
   for (const goal of goals) {
-    const elapsed = countElapsedPeriods(challenge.start_date, goal.window, referenceDate);
+    const elapsed = countElapsedPeriods(challenge.start_date, goal.goal_window, referenceDate);
     const summary = computeGoalPeriodSummary(
       goal,
       checkInMap[goal.id] ?? {},
       elapsed
     );
     const missedDays = Math.min(
-      summary.missedPeriods * daysPerPeriod(goal.window),
+      summary.missedPeriods * daysPerPeriod(goal.goal_window),
       challenge.duration_days
     );
     // Each goal contributes an equal share of the stake
@@ -95,13 +95,13 @@ export function computeGoalProgress(
   checkIns: CheckIn[],
   referenceDate: Date = new Date()
 ): GoalProgress {
-  const currentKey = getWindowKey(referenceDate, goal.window);
+  const currentKey = getWindowKey(referenceDate, goal.goal_window);
   const currentCount = checkIns.filter(
     (ci) => ci.goal_id === goal.id && ci.window_key === currentKey
   ).length;
 
   const windowLabel =
-    goal.window === 'daily' ? 'Today' : goal.window === 'weekly' ? 'This Week' : 'This Month';
+    goal.goal_window === 'daily' ? 'Today' : goal.goal_window === 'weekly' ? 'This Week' : 'This Month';
 
   return {
     goal,

@@ -33,7 +33,7 @@ CREATE TABLE goals (
   challenge_id  UUID NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
   name          TEXT NOT NULL,
   target_count  INTEGER NOT NULL,
-  window        TEXT NOT NULL CHECK (window IN ('daily', 'weekly', 'monthly')),
+  goal_window   TEXT NOT NULL CHECK (goal_window IN ('daily', 'weekly', 'monthly')),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

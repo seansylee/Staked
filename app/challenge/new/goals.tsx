@@ -19,17 +19,17 @@ export default function GoalsScreen() {
   const [goals, setGoals] = useState<GoalDraft[]>(draft?.goals ?? []);
   const [name, setName] = useState('');
   const [count, setCount] = useState('1');
-  const [window, setWindow] = useState<Window>('daily');
+  const [goalWindow, setGoalWindow] = useState<Window>('daily');
 
   const addGoal = () => {
     const trimmed = name.trim();
     const n = parseInt(count, 10);
     if (!trimmed) { Alert.alert('Enter a goal name'); return; }
     if (!n || n < 1) { Alert.alert('Count must be at least 1'); return; }
-    setGoals((g) => [...g, { name: trimmed, target_count: n, window }]);
+    setGoals((g) => [...g, { name: trimmed, target_count: n, goal_window: goalWindow }]);
     setName('');
     setCount('1');
-    setWindow('daily');
+    setGoalWindow('daily');
   };
 
   const onNext = () => {
@@ -53,7 +53,7 @@ export default function GoalsScreen() {
           <View key={i} style={styles.goalItem}>
             <View style={styles.goalInfo}>
               <Text style={styles.goalName}>{g.name}</Text>
-              <Text style={styles.goalDetail}>{g.target_count}× / {g.window}</Text>
+              <Text style={styles.goalDetail}>{g.target_count}× / {g.goal_window}</Text>
             </View>
             <TouchableOpacity onPress={() => setGoals((prev) => prev.filter((_, j) => j !== i))}>
               <Text style={styles.remove}>✕</Text>
@@ -81,10 +81,10 @@ export default function GoalsScreen() {
                 {WINDOWS.map((w) => (
                   <TouchableOpacity
                     key={w.value}
-                    style={[styles.pill, window === w.value && styles.pillActive]}
-                    onPress={() => setWindow(w.value)}
+                    style={[styles.pill, goalWindow === w.value && styles.pillActive]}
+                    onPress={() => setGoalWindow(w.value)}
                   >
-                    <Text style={[styles.pillText, window === w.value && styles.pillActiveText]}>
+                    <Text style={[styles.pillText, goalWindow === w.value && styles.pillActiveText]}>
                       {w.label}
                     </Text>
                   </TouchableOpacity>

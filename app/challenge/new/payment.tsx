@@ -81,7 +81,7 @@ export default function PaymentScreen() {
         <View style={styles.card}>
           {draft.goals.map((g, i) => (
             <Text key={i} style={styles.goalLine}>
-              {g.name}  ·  {g.target_count}×/{g.window}
+              {g.name}  ·  {g.target_count}×/{g.goal_window}
             </Text>
           ))}
         </View>

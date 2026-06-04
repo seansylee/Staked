@@ -54,7 +54,7 @@ function daysPerPeriod(window: WindowType): number {
   return window === 'daily' ? 1 : window === 'weekly' ? 7 : 30;
 }
 
-interface Goal { id: string; target_count: number; window: WindowType; }
+interface Goal { id: string; target_count: number; goal_window: WindowType; }
 interface CheckIn { goal_id: string; window_key: string; }
 interface Challenge { stake_amount: number; duration_days: number; start_date: string; end_date: string; }
 
@@ -76,7 +76,7 @@ function computeProtectionCents(
   let totalMissedDayEquivalents = 0;
 
   for (const goal of goals) {
-    const elapsed = countElapsedPeriods(challenge.start_date, goal.window, ref);
+    const elapsed = countElapsedPeriods(challenge.start_date, goal.goal_window, ref);
     const byKey = checkInMap[goal.id] ?? {};
     let completed = 0;
     for (const count of Object.values(byKey)) {
@@ -84,7 +84,7 @@ function computeProtectionCents(
     }
     completed = Math.min(completed, elapsed);
     const missed = elapsed - completed;
-    totalMissedDayEquivalents += Math.min(missed * daysPerPeriod(goal.window), challenge.duration_days) / (goals.length || 1);
+    totalMissedDayEquivalents += Math.min(missed * daysPerPeriod(goal.goal_window), challenge.duration_days) / (goals.length || 1);
   }
 
   const forfeitedCents = Math.min(Math.round(totalMissedDayEquivalents * dpv), stake);
