@@ -12,7 +12,7 @@ This is an MVP to validate whether users will stake real money to improve follow
 
 ## Current Status
 
-**Backend is live and connected.** The app is running against real Supabase + Stripe in test mode.
+**Backend is live and connected. UI revamp complete (commit `cd546e4`).**
 
 - ✅ Supabase project live: `https://xctocyxiwnjdltxqlqyl.supabase.co`
 - ✅ Database migration run (`supabase/migrations/001_initial_schema.sql`)
@@ -20,6 +20,7 @@ This is an MVP to validate whether users will stake real money to improve follow
 - ✅ Stripe secret key set as Supabase secret (`STRIPE_SECRET_KEY`)
 - ✅ `.env` filled with real keys, `EXPO_PUBLIC_DEMO_MODE=false`
 - ✅ App running locally (`npx expo start --ios`, requires `nvm use 20`)
+- ✅ UI revamp complete — new theme, font, dashboard streak/nudge system
 
 **Next step:** Smoke test the full flow — sign up, create a challenge, pay with Stripe test card `4242 4242 4242 4242`, log check-ins, complete challenge, verify refund.
 
@@ -72,8 +73,8 @@ src/
   api/
     payments.ts         Calls Supabase Edge Functions (create-payment-intent, etc.)
   utils/
-    dates.ts            getWindowKey, countElapsedPeriods, elapsedDays
-    protection.ts       computeProtection, computeGoalProgress (core financial logic)
+    dates.ts            getWindowKey, countElapsedPeriods, elapsedDays, windowEndLabel, daysUntilWindowEnd
+    protection.ts       computeProtection, computeGoalProgress, computeDashboardStatus (core financial logic)
     formatting.ts       formatCurrency, formatDate, pluralize
   components/
     ui/                 Button, Card, Input, ProgressBar, Badge
@@ -91,15 +92,19 @@ supabase/
 
 ## Design System
 
-Dark, minimal, chic. Theme is in `src/constants/theme.ts`.
+Dark navy, warm cream text. Theme is in `src/constants/theme.ts`.
 
-- Background: `#0F0F0F`
-- Surface (cards): `#1A1A1A`, border `#2A2A2A`
-- Text: `#F5F5F5` primary, `#888` secondary, `#444` muted
+- Background: `#0E1019` (deep navy-black)
+- Surface (cards): `#161929`, border `#232740`
+- Text: `#F7F9E5` primary (warm cream), `#9B9D85` secondary, `#545649` muted
 - Success: `#22C55E` (green), Danger: `#EF4444` (red)
 - Primary button: white background / black text (inverted on dark)
-- Money amounts: 52px bold on the vault panel, 36px on cards
+- Money amounts: `HelveticaNeue-CondensedBlack`, `scaleY: 1.35`, `letterSpacing: -0.5`
+  - 52px on the vault panel, 36px on cards
+- Display font (all headings + amounts): `HelveticaNeue-CondensedBlack` with `transform: [{ scaleY: 1.35 }]`
+- Body/UI font: system default (no custom font)
 - Labels: 11px uppercase, letter-spacing 0.6–1
+- At-risk nudge color: `#A07840` (warm amber — not red, intentionally calm)
 
 ---
 
@@ -199,6 +204,30 @@ Run locally: `npx expo start --ios` (requires Node ≥20.13 — run `nvm use 20`
 
 ---
 
+## Dashboard Card Behaviour
+
+`ChallengeCard` uses `computeDashboardStatus` to show:
+- Streak pill (emoji + "N week/day streak") — bottom-right of the dollar amount
+- Per-goal nudges below the progress bar: `GoalName Nx by <deadline>  $X at stake`
+  - Nudge color for at-stake amount: `#A07840` (warm amber)
+  - No red on the dashboard — red only appears when money is actually forfeited
+- Emoji logic: 🔥 ≥4 streak, 💪 2–3 streak, ✅ all complete, ⚡ at risk, 🎯 1 streak, 💰 in progress
+- `computeDashboardStatus` lives in `src/utils/protection.ts`
+- `windowEndLabel` / `daysUntilWindowEnd` live in `src/utils/dates.ts`
+
+## GoalRow Check-in Button
+
+`src/components/challenge/GoalRow.tsx` — "Log it" pill button (white) per goal. When the period target is met it flips to "✓ Done" (green, disabled). Dot indicators (filled = completed, empty = remaining) show progress at a glance.
+
+## Demo Mode Details
+
+- `EXPO_PUBLIC_DEMO_MODE=true` — set in `.env` for local UI dev without credentials
+- Store is pre-populated at init time (no need for `fetchChallenges` to run first)
+- `addCheckIn` works in demo mode without Supabase auth
+- Demo data includes 3 weeks of historical check-ins for Summer Fitness and 5 past days for Deep Work, so streak/nudge logic renders meaningfully
+- Deep links work in demo mode (store is pre-populated, no "Challenge not found")
+- Back button uses `router.canGoBack() ? router.back() : router.replace('/(tabs)')` to prevent GO_BACK crash on deep links
+
 ## Preferences & Decisions
 
 - Commits after every meaningful phase, always push to origin
@@ -208,3 +237,4 @@ Run locally: `npx expo start --ios` (requires Node ≥20.13 — run `nvm use 20`
 - Edge Functions own all Stripe secret-key operations
 - Demo mode must always work without credentials
 - Node version: use `nvm use 20` (v20.20.2) — project requires ≥20.13
+- Stripe import is a lazy `require` on native only (`_layout.tsx`) — keeps the file web-safe if needed later
