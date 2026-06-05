@@ -10,6 +10,23 @@ This is an MVP to validate whether users will stake real money to improve follow
 
 ---
 
+## Current Status
+
+**Backend is live and connected.** The app is running against real Supabase + Stripe in test mode.
+
+- ✅ Supabase project live: `https://xctocyxiwnjdltxqlqyl.supabase.co`
+- ✅ Database migration run (`supabase/migrations/001_initial_schema.sql`)
+- ✅ All 3 Edge Functions deployed to Supabase
+- ✅ Stripe secret key set as Supabase secret (`STRIPE_SECRET_KEY`)
+- ✅ `.env` filled with real keys, `EXPO_PUBLIC_DEMO_MODE=false`
+- ✅ App running locally (`npx expo start --ios`, requires `nvm use 20`)
+
+**Next step:** Smoke test the full flow — sign up, create a challenge, pay with Stripe test card `4242 4242 4242 4242`, log check-ins, complete challenge, verify refund.
+
+**After that:** TestFlight build for real device testing (`eas build --platform ios --profile preview` — needs $99 Apple Developer account).
+
+---
+
 ## Tech Stack
 
 | Concern | Choice |
@@ -19,9 +36,9 @@ This is an MVP to validate whether users will stake real money to improve follow
 | State | Zustand (`src/store/`) |
 | Backend | Supabase (Postgres + Realtime + Edge Functions) |
 | Auth | Supabase Auth |
-| Payments | Stripe via `@stripe/stripe-react-native` |
+| Payments | Stripe via `@stripe/stripe-react-native` (test mode) |
 | Notifications | Expo Notifications |
-| Analytics | PostHog |
+| Analytics | PostHog (key not yet set — placeholder in .env) |
 | Language | TypeScript (strict), path alias `@/*` → `src/*` |
 
 ---
@@ -97,7 +114,7 @@ For each goal:
   - Count elapsed complete periods (daily/weekly/monthly)
   - Current in-flight period is NOT counted as missed
   - missedPeriods = elapsedPeriods - completedPeriods
-  - missedDayEquivalents = missedPeriods × daysPerPeriod(window)
+  - missedDayEquivalents = missedPeriods × daysPerPeriod(goal_window)
 
 With multiple goals, each contributes missedDayEquivalents / goals.length
 (missing one of two goals forfeits only half the stake)
@@ -108,6 +125,8 @@ protectedCents = stake - forfeitedCents
 
 `window_key` is stamped on every check-in at write time (e.g. `"2024-W23"` for weekly goals). This makes counting completions an O(1) indexed DB lookup.
 
+**Important:** The goals table column is named `goal_window` (not `window` — reserved word in PostgreSQL).
+
 Run tests: `npm test` (6 unit tests in `src/__tests__/protection.test.ts`)
 
 ---
@@ -116,7 +135,7 @@ Run tests: `npm test` (6 unit tests in `src/__tests__/protection.test.ts`)
 
 - `profiles` — extends auth.users, stores stripe_customer_id, push_token
 - `challenges` — stake_amount (cents), duration_days, start_date, end_date, status
-- `goals` — target_count, window (daily/weekly/monthly)
+- `goals` — target_count, `goal_window` (daily/weekly/monthly)
 - `check_ins` — goal_id, challenge_id, window_key (stamped at write)
 - `payments` — audit log for deposits and refunds
 
@@ -138,47 +157,54 @@ All tables have RLS (users see only their own data). Auto-trigger creates `profi
 
 ## Environment Variables
 
-Required in `.env` (gitignored):
+`.env` is gitignored. Current state — all real keys are set:
 
 ```
-EXPO_PUBLIC_SUPABASE_URL=
-EXPO_PUBLIC_SUPABASE_ANON_KEY=
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
-EXPO_PUBLIC_POSTHOG_API_KEY=
+EXPO_PUBLIC_SUPABASE_URL=https://xctocyxiwnjdltxqlqyl.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<set>
+EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=<set, pk_test_...>
+EXPO_PUBLIC_POSTHOG_API_KEY=placeholder_posthog_key   ← not yet configured
 EXPO_PUBLIC_DEMO_MODE=false
 ```
 
-Supabase Edge Functions need these secrets (set via `supabase secrets set`):
+Supabase Edge Function secrets (already deployed):
 ```
-STRIPE_SECRET_KEY=sk_...
+STRIPE_SECRET_KEY=sk_test_...   ← set via supabase secrets set
+```
+
+To redeploy Edge Functions:
+```bash
+export SUPABASE_ACCESS_TOKEN=<personal access token>
+npx supabase functions deploy create-payment-intent --project-ref xctocyxiwnjdltxqlqyl
+npx supabase functions deploy confirm-challenge-start --project-ref xctocyxiwnjdltxqlqyl
+npx supabase functions deploy complete-challenge --project-ref xctocyxiwnjdltxqlqyl
 ```
 
 ---
 
 ## Demo Mode
 
-Set `EXPO_PUBLIC_DEMO_MODE=true` in `.env` to run the app without any real API calls. `src/lib/demo.ts` provides mock challenges, goals, and check-ins. `useAuthStore` and `useChallengeStore` short-circuit to use mock data when this flag is set.
+Set `EXPO_PUBLIC_DEMO_MODE=true` in `.env` to run without any real API calls. `src/lib/demo.ts` provides mock challenges, goals, and check-ins. `useAuthStore` and `useChallengeStore` short-circuit to use mock data when this flag is set.
 
-Run locally: `npx expo start --ios` (requires Node ≥20.13; use `nvm use 20`)
+Run locally: `npx expo start --ios` (requires Node ≥20.13 — run `nvm use 20` first)
 
 ---
 
 ## What's Left to Ship
 
-- [ ] Create Supabase project, run `supabase/migrations/001_initial_schema.sql`
-- [ ] Set Stripe secret key: `supabase secrets set STRIPE_SECRET_KEY=sk_test_...`
-- [ ] Deploy Edge Functions: `supabase functions deploy create-payment-intent` (×3)
-- [ ] Fill in real keys in `.env`, set `EXPO_PUBLIC_DEMO_MODE=false`
-- [ ] Smoke test: create challenge → pay with Stripe test card `4242 4242 4242 4242`
-- [ ] TestFlight build: `eas build --platform ios --profile preview` (needs $99 Apple Dev account)
+- [ ] Smoke test full flow end-to-end (sign up → create challenge → pay → check-in → complete → refund)
+- [ ] Set up PostHog account and add real API key to `.env`
+- [ ] TestFlight build: `eas build --platform ios --profile preview` (needs $99 Apple Developer account)
+- [ ] Switch Stripe from test mode to live mode when ready for real money
 
 ---
 
 ## Preferences & Decisions
 
-- Commits after every meaningful phase
+- Commits after every meaningful phase, always push to origin
 - No comments in code unless the WHY is non-obvious
 - No extra abstractions — keep it direct
 - Monetary values always in cents, convert to dollars only in formatting utils
 - Edge Functions own all Stripe secret-key operations
 - Demo mode must always work without credentials
+- Node version: use `nvm use 20` (v20.20.2) — project requires ≥20.13
