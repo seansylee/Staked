@@ -67,9 +67,10 @@ const styles = StyleSheet.create({
   },
   bigAmount: {
     fontSize: 52,
-    fontWeight: '800',
+    fontFamily: 'HelveticaNeue-CondensedBlack',
     color: colors.text,
-    letterSpacing: -2,
+    letterSpacing: -0.5,
+    transform: [{ scaleY: 1.35 }],
     marginTop: -4,
   },
   row: {

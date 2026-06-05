@@ -30,10 +30,26 @@ const DEFAULT_DRAFT: ChallengeDraft = {
   goals: [],
 };
 
+function buildDemoMaps() {
+  const goalsMap: Record<string, Goal[]> = {};
+  const checkInsMap: Record<string, CheckIn[]> = {};
+  for (const g of DEMO_GOALS) {
+    if (!goalsMap[g.challenge_id]) goalsMap[g.challenge_id] = [];
+    goalsMap[g.challenge_id].push(g);
+  }
+  for (const ci of DEMO_CHECK_INS) {
+    if (!checkInsMap[ci.challenge_id]) checkInsMap[ci.challenge_id] = [];
+    checkInsMap[ci.challenge_id].push(ci);
+  }
+  return { goalsMap, checkInsMap };
+}
+
+const demoInit = DEMO_MODE ? buildDemoMaps() : null;
+
 export const useChallengeStore = create<ChallengeState>((set, get) => ({
-  challenges: [],
-  goalsMap: {},
-  checkInsMap: {},
+  challenges: DEMO_MODE ? DEMO_CHALLENGES : [],
+  goalsMap: demoInit?.goalsMap ?? {},
+  checkInsMap: demoInit?.checkInsMap ?? {},
   isLoading: false,
   draft: null,
   _channel: null,
@@ -131,9 +147,6 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
   clearDraft: () => set({ draft: null }),
 
   addCheckIn: async (goalId, challengeId) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
     const goals = get().goalsMap[challengeId] ?? [];
     const goal = goals.find((g) => g.id === goalId);
     if (!goal) return;
@@ -141,7 +154,27 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
     const now = new Date();
     const windowKey = getWindowKey(now, goal.goal_window);
 
-    // Optimistic update
+    if (DEMO_MODE) {
+      const demoCheckIn: CheckIn = {
+        id: `demo-${Date.now()}`,
+        goal_id: goalId,
+        challenge_id: challengeId,
+        user_id: 'demo-user',
+        logged_at: now.toISOString(),
+        window_key: windowKey,
+      };
+      set((state) => ({
+        checkInsMap: {
+          ...state.checkInsMap,
+          [challengeId]: [...(state.checkInsMap[challengeId] ?? []), demoCheckIn],
+        },
+      }));
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const optimisticCheckIn: CheckIn = {
       id: `optimistic-${Date.now()}`,
       goal_id: goalId,
@@ -170,7 +203,6 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
       .single();
 
     if (error || !data) {
-      // Roll back optimistic update
       set((state) => ({
         checkInsMap: {
           ...state.checkInsMap,
@@ -182,7 +214,6 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
       throw error ?? new Error('Failed to log check-in');
     }
 
-    // Replace optimistic entry with real one
     set((state) => ({
       checkInsMap: {
         ...state.checkInsMap,

@@ -104,7 +104,7 @@ const rowStyles = StyleSheet.create({
   label: { fontSize: 14, color: colors.textSecondary },
   labelLarge: { fontSize: 15, fontWeight: '600', color: colors.text },
   value: { fontSize: 15, fontWeight: '600' },
-  valueLarge: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  valueLarge: { fontSize: 24, fontFamily: 'HelveticaNeue-CondensedBlack', letterSpacing: -0.5, transform: [{ scaleY: 1.35 }] },
 });
 
 const styles = StyleSheet.create({
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  heroName: { fontSize: 34, fontWeight: '800', color: colors.text, letterSpacing: -1 },
+  heroName: { fontSize: 34, fontFamily: 'HelveticaNeue-CondensedBlack', color: colors.text, letterSpacing: -0.5, transform: [{ scaleY: 1.35 }] },
   heroRate: { fontSize: 16, color: colors.textSecondary },
   card: {
     backgroundColor: colors.surface,

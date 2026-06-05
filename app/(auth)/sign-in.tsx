@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   back: { paddingTop: 8, paddingBottom: 32 },
   backText: { fontSize: 22, color: colors.textSecondary },
   header: { gap: 8, marginBottom: 40 },
-  title: { fontSize: 32, fontWeight: '800', color: colors.text, letterSpacing: -1 },
+  title: { fontSize: 32, fontFamily: 'HelveticaNeue-CondensedBlack', color: colors.text, letterSpacing: -0.5, transform: [{ scaleY: 1.35 }] },
   subtitle: { fontSize: 16, color: colors.textSecondary },
   form: { gap: 20 },
   btn: { marginTop: 8 },

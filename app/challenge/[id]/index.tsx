@@ -80,7 +80,7 @@ export default function ChallengeDetailScreen() {
   if (!challenge || !summary) {
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.back}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <View style={styles.center}>
@@ -96,7 +96,7 @@ export default function ChallengeDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.back}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
@@ -156,9 +156,10 @@ const styles = StyleSheet.create({
   },
   challengeName: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'HelveticaNeue-CondensedBlack',
     color: colors.text,
-    letterSpacing: -1,
+    letterSpacing: -0.5,
+    transform: [{ scaleY: 1.35 }],
     flex: 1,
   },
   dates: { fontSize: 12, color: colors.textMuted, marginBottom: 8 },

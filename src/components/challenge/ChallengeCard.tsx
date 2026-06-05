@@ -6,7 +6,7 @@ import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { Challenge } from '@/types';
 import { formatCurrency, pluralize } from '@/utils/formatting';
-import { computeProtection, daysRemainingForChallenge } from '@/utils/protection';
+import { computeDashboardStatus, computeProtection, daysRemainingForChallenge } from '@/utils/protection';
 
 interface ChallengeCardProps {
   challenge: Challenge;
@@ -24,6 +24,11 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
     [challenge, goals, checkIns]
   );
 
+  const status = useMemo(
+    () => computeDashboardStatus(challenge, goals, checkIns),
+    [challenge, goals, checkIns]
+  );
+
   const daysLeft = daysRemainingForChallenge(challenge);
 
   return (
@@ -37,8 +42,16 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
         <Text style={styles.days}>{pluralize(daysLeft, 'day')} left</Text>
       </View>
 
-      <Text style={styles.amount}>{formatCurrency(summary.protectedFunds)}</Text>
-      <Text style={styles.amountLabel}>protected</Text>
+      <View style={styles.amountRow}>
+        <View>
+          <Text style={styles.amount}>{formatCurrency(summary.protectedFunds)}</Text>
+          <Text style={styles.amountLabel}>protected</Text>
+        </View>
+        <View style={styles.statusPill}>
+          <Text style={styles.statusEmoji}>{status.emoji}</Text>
+          <Text style={styles.statusText}>{status.statusText}</Text>
+        </View>
+      </View>
 
       <View style={styles.progressSection}>
         <ProgressBar
@@ -49,8 +62,20 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
         />
       </View>
 
-      {summary.fundsAtRisk > 0 && (
-        <Text style={styles.atRisk}>{formatCurrency(summary.fundsAtRisk)} at risk</Text>
+      {status.nudges.length > 0 && (
+        <View style={styles.nudgeBox}>
+          {status.nudges.map((n) => (
+            <View key={n.goalName} style={styles.nudgeRow}>
+              <Text style={styles.nudgeDot}>·</Text>
+              <Text style={styles.nudgeText}>
+                {n.goalName}
+                <Text style={styles.nudgeNeeded}> {n.needed}×</Text>
+                <Text style={styles.nudgeDeadline}> {n.deadline}</Text>
+                <Text style={styles.nudgeRisk}>  {formatCurrency(n.atRiskCents)} at stake</Text>
+              </Text>
+            </View>
+          ))}
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -73,20 +98,48 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: 16, fontWeight: '600', color: colors.text },
   days: { fontSize: 12, color: colors.textSecondary },
-  amount: { fontSize: 36, fontWeight: '800', color: colors.text, letterSpacing: -1.5 },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  amount: {
+    fontSize: 36,
+    fontFamily: 'HelveticaNeue-CondensedBlack',
+    color: colors.text,
+    letterSpacing: -0.5,
+    transform: [{ scaleY: 1.35 }],
+  },
   amountLabel: {
     fontSize: 11,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     fontWeight: '500',
-    marginBottom: 14,
+    marginTop: 2,
   },
-  progressSection: {},
-  atRisk: {
-    fontSize: 12,
-    color: colors.danger,
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.surfaceHigh,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    marginBottom: 2,
+  },
+  statusEmoji: { fontSize: 13 },
+  statusText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  progressSection: { marginTop: 10, marginBottom: 4 },
+  nudgeBox: {
     marginTop: 8,
-    fontWeight: '500',
+    gap: 3,
   },
+  nudgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  nudgeDot: { fontSize: 12, color: colors.textMuted },
+  nudgeText: { fontSize: 12, color: colors.textSecondary },
+  nudgeNeeded: { fontSize: 12, fontWeight: '700', color: colors.text },
+  nudgeDeadline: { fontSize: 12, color: colors.textMuted },
+  nudgeRisk: { fontSize: 12, color: '#A07840' },
 });

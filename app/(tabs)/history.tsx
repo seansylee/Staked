@@ -68,7 +68,7 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
-  title: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  title: { fontSize: 26, fontFamily: 'HelveticaNeue-CondensedBlack', color: colors.text, letterSpacing: -0.5, transform: [{ scaleY: 1.35 }] },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   emptySubtitle: { fontSize: 14, color: colors.textSecondary },

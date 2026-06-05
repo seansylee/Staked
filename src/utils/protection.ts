@@ -3,8 +3,120 @@ import {
   countElapsedPeriods,
   daysRemaining,
   elapsedDays,
+  getElapsedWindowKeys,
   getWindowKey,
+  windowEndLabel,
 } from './dates';
+
+export interface GoalNudge {
+  goalName: string;
+  needed: number;
+  deadline: string;
+  atRiskCents: number;
+}
+
+export interface DashboardStatus {
+  streak: number;
+  isAtRisk: boolean;
+  allCurrentComplete: boolean;
+  emoji: string;
+  statusText: string;
+  nudges: GoalNudge[];
+}
+
+export function computeDashboardStatus(
+  challenge: Challenge,
+  goals: Goal[],
+  checkIns: CheckIn[],
+  referenceDate: Date = new Date()
+): DashboardStatus {
+  const checkInMap: Record<string, Record<string, number>> = {};
+  for (const ci of checkIns) {
+    if (!checkInMap[ci.goal_id]) checkInMap[ci.goal_id] = {};
+    checkInMap[ci.goal_id][ci.window_key] = (checkInMap[ci.goal_id][ci.window_key] ?? 0) + 1;
+  }
+
+  const isGoalComplete = (goal: Goal, key: string) =>
+    (checkInMap[goal.id]?.[key] ?? 0) >= goal.target_count;
+
+  const allCurrentComplete = goals.every(g =>
+    isGoalComplete(g, getWindowKey(referenceDate, g.goal_window))
+  );
+
+  // Streak: consecutive past closed periods where all goals were met.
+  // Use the coarsest window present as the period unit.
+  const primaryWindow: Window = goals.some(g => g.goal_window === 'monthly')
+    ? 'monthly' : goals.some(g => g.goal_window === 'weekly')
+    ? 'weekly' : 'daily';
+
+  const pastKeys = getElapsedWindowKeys(challenge.start_date, primaryWindow, referenceDate);
+  let streak = 0;
+  for (let i = pastKeys.length - 1; i >= 0; i--) {
+    const periodKey = pastKeys[i];
+    const allDone = goals.every(g => isGoalComplete(g, periodKey));
+    if (allDone) streak++;
+    else break;
+  }
+
+  // Upcoming risk: any incomplete goal whose current period ends soon
+  const isAtRisk = !allCurrentComplete && goals.some(goal => {
+    const key = getWindowKey(referenceDate, goal.goal_window);
+    if (isGoalComplete(goal, key)) return false;
+    if (goal.goal_window === 'daily') return referenceDate.getHours() >= 18;
+    if (goal.goal_window === 'weekly') {
+      const day = referenceDate.getDay(); // 0=Sun, 5=Fri, 6=Sat
+      return day === 0 || day >= 5;
+    }
+    if (goal.goal_window === 'monthly') {
+      const daysInMonth = new Date(
+        referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0
+      ).getDate();
+      return daysInMonth - referenceDate.getDate() <= 3;
+    }
+    return false;
+  });
+
+  let emoji: string;
+  let statusText: string;
+
+  if (isAtRisk) {
+    emoji = '⚡';
+    statusText = 'Finish strong';
+  } else if (streak >= 4) {
+    emoji = '🔥';
+    statusText = `${streak} ${primaryWindow === 'daily' ? 'day' : primaryWindow === 'weekly' ? 'week' : 'month'} streak`;
+  } else if (streak >= 2) {
+    emoji = '💪';
+    statusText = `${streak} ${primaryWindow === 'daily' ? 'day' : primaryWindow === 'weekly' ? 'week' : 'month'} streak`;
+  } else if (allCurrentComplete) {
+    emoji = '✅';
+    statusText = 'All done';
+  } else if (streak === 1) {
+    emoji = '🎯';
+    statusText = '1 streak going';
+  } else {
+    emoji = '💰';
+    statusText = 'In progress';
+  }
+
+  const dpv = challenge.stake_amount / challenge.duration_days;
+  const nudges: GoalNudge[] = goals
+    .filter(g => !isGoalComplete(g, getWindowKey(referenceDate, g.goal_window)))
+    .map(g => {
+      const key = getWindowKey(referenceDate, g.goal_window);
+      const done = checkInMap[g.id]?.[key] ?? 0;
+      const needed = g.target_count - done;
+      const atRiskCents = Math.round(daysPerPeriod(g.goal_window) * dpv / goals.length);
+      return {
+        goalName: g.name,
+        needed,
+        deadline: windowEndLabel(g.goal_window, referenceDate),
+        atRiskCents,
+      };
+    });
+
+  return { streak, isAtRisk, allCurrentComplete, emoji, statusText, nudges };
+}
 
 interface GoalPeriodSummary {
   goalId: string;

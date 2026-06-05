@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 16,
   },
-  title: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  title: { fontSize: 26, fontFamily: 'HelveticaNeue-CondensedBlack', color: colors.text, letterSpacing: -0.5, transform: [{ scaleY: 1.35 }] },
   newBtn: {
     backgroundColor: colors.surface,
     borderWidth: 1,

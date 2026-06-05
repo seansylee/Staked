@@ -1,21 +1,21 @@
 export const colors = {
-  bg: '#0F0F0F',
-  bgElevated: '#161616',
-  surface: '#1A1A1A',
-  surfaceHigh: '#242424',
-  border: '#2A2A2A',
-  borderLight: '#333333',
+  bg: '#0E1019',
+  bgElevated: '#121522',
+  surface: '#161929',
+  surfaceHigh: '#1C2034',
+  border: '#232740',
+  borderLight: '#2B304C',
 
-  text: '#F5F5F5',
-  textSecondary: '#888888',
-  textMuted: '#444444',
+  text: '#F7F9E5',
+  textSecondary: '#9B9D85',
+  textMuted: '#545649',
 
   success: '#22C55E',
-  successBg: '#0D1F14',
+  successBg: '#0D1A1F',
   successText: '#22C55E',
 
   danger: '#EF4444',
-  dangerBg: '#200D0D',
+  dangerBg: '#1F0D14',
   dangerText: '#EF4444',
 
   white: '#FFFFFF',
@@ -28,6 +28,17 @@ export const radius = {
   lg: 16,
   xl: 20,
   full: 999,
+};
+
+export const typography = {
+  display: {
+    fontFamily: 'HelveticaNeue-CondensedBlack',
+    letterSpacing: -0.5,
+  },
+  displayLight: {
+    fontFamily: 'HelveticaNeue-CondensedBold',
+    letterSpacing: -0.3,
+  },
 };
 
 export const spacing = {

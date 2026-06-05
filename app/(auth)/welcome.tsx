@@ -42,9 +42,10 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontSize: 64,
-    fontWeight: '800',
+    fontFamily: 'HelveticaNeue-CondensedBlack',
     color: colors.text,
-    letterSpacing: -3,
+    letterSpacing: -0.5,
+    transform: [{ scaleY: 1.35 }],
   },
   tagline: {
     fontSize: 22,

@@ -55,7 +55,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
-  title: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  title: { fontSize: 26, fontFamily: 'HelveticaNeue-CondensedBlack', color: colors.text, letterSpacing: -0.5, transform: [{ scaleY: 1.35 }] },
   content: { paddingHorizontal: 20, gap: 32 },
   section: { gap: 10 },
   sectionLabel: {

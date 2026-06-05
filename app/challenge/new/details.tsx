@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: 8,
   },
-  title: { fontSize: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.8, marginBottom: 32 },
+  title: { fontSize: 28, fontFamily: 'HelveticaNeue-CondensedBlack', color: colors.text, letterSpacing: -0.5, transform: [{ scaleY: 1.35 }], marginBottom: 32 },
   form: { gap: 28 },
   field: { gap: 12 },
   fieldLabel: {

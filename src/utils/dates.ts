@@ -113,6 +113,39 @@ export function getElapsedWindowKeys(
   return keys;
 }
 
+export function daysUntilWindowEnd(window: Window, referenceDate: Date = new Date()): number {
+  if (window === 'daily') {
+    const midnight = new Date(referenceDate);
+    midnight.setHours(23, 59, 59, 999);
+    return Math.ceil((midnight.getTime() - referenceDate.getTime()) / 3_600_000) / 24;
+  }
+  if (window === 'weekly') {
+    // ISO week ends Sunday
+    const day = referenceDate.getDay(); // 0=Sun
+    const daysLeft = day === 0 ? 0 : 7 - day;
+    return daysLeft;
+  }
+  // monthly
+  const lastDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0);
+  return lastDay.getDate() - referenceDate.getDate();
+}
+
+export function windowEndLabel(window: Window, referenceDate: Date = new Date()): string {
+  if (window === 'daily') return 'tonight';
+  if (window === 'weekly') {
+    const days = daysUntilWindowEnd('weekly', referenceDate);
+    if (days === 0) return 'today';
+    if (days === 1) return 'tomorrow';
+    const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const endDay = new Date(referenceDate);
+    endDay.setDate(endDay.getDate() + days);
+    return `by ${names[endDay.getDay()]}`;
+  }
+  const lastDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0);
+  const daysLeft = lastDay.getDate() - referenceDate.getDate();
+  return `${daysLeft}d left in month`;
+}
+
 export function daysRemaining(endDate: string, referenceDate: Date = new Date()): number {
   const end = new Date(endDate + 'T23:59:59');
   const diff = end.getTime() - referenceDate.getTime();
