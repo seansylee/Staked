@@ -20,6 +20,7 @@ interface ChallengeState {
   updateDraftGoals: (goals: GoalDraft[]) => void;
   clearDraft: () => void;
   addCheckIn: (goalId: string, challengeId: string) => Promise<void>;
+  addDemoChallenge: (draft: ChallengeDraft) => string;
   setChallengeCompleted: (challenge: Challenge) => void;
 }
 
@@ -222,6 +223,49 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
         ),
       },
     }));
+  },
+
+  addDemoChallenge: (draft) => {
+    const id = `demo-${Date.now()}`;
+    const now = new Date();
+    const start = now.toISOString().slice(0, 10);
+    const end = new Date(now.getTime() + draft.duration_days * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+
+    const challenge: Challenge = {
+      id,
+      user_id: 'demo-user',
+      name: draft.name,
+      stake_amount: draft.stake_amount_cents,
+      platform_fee: 300,
+      duration_days: draft.duration_days,
+      start_date: start,
+      end_date: end,
+      status: 'active',
+      stripe_payment_intent_id: 'pi_demo_new',
+      stripe_refund_id: null,
+      protected_amount_cents: null,
+      forfeited_amount_cents: null,
+      created_at: now.toISOString(),
+    };
+
+    const goals: Goal[] = draft.goals.map((g, i) => ({
+      id: `${id}-g${i}`,
+      challenge_id: id,
+      name: g.name,
+      target_count: g.target_count,
+      goal_window: g.goal_window,
+      created_at: now.toISOString(),
+    }));
+
+    set((state) => ({
+      challenges: [challenge, ...state.challenges],
+      goalsMap: { ...state.goalsMap, [id]: goals },
+      checkInsMap: { ...state.checkInsMap, [id]: [] },
+    }));
+
+    return id;
   },
 
   setChallengeCompleted: (updatedChallenge) => {

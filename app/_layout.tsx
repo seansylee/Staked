@@ -13,7 +13,10 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}>
+      <StripeProvider
+        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}
+        merchantIdentifier="merchant.com.staked.app"
+      >
         <Stack screenOptions={{ headerShown: false }} />
       </StripeProvider>
     </SafeAreaProvider>
