@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { posthog } from '@/lib/posthog';
+import { DEMO_MODE } from '@/lib/demo';
 import { confirmChallengeStart, createPaymentIntent } from '@/api/payments';
 import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
@@ -12,8 +13,31 @@ import { formatCurrency } from '@/utils/formatting';
 
 const PLATFORM_FEE_CENTS = 300;
 
+const dollars = (cents: number) => (cents / 100).toFixed(2);
+
+const sheetAppearance = {
+  colors: {
+    primary: colors.white,
+    background: colors.bg,
+    componentBackground: colors.surface,
+    componentBorder: colors.border,
+    componentDivider: colors.border,
+    primaryText: colors.text,
+    secondaryText: colors.textSecondary,
+    componentText: colors.text,
+    placeholderText: colors.textMuted,
+    icon: colors.textSecondary,
+    error: colors.danger,
+  },
+  shapes: { borderRadius: radius.md, borderWidth: 1 },
+  primaryButton: {
+    colors: { background: colors.white, text: colors.black, border: colors.white },
+    shapes: { borderRadius: radius.md },
+  },
+} as const;
+
 export default function PaymentScreen() {
-  const { draft, clearDraft, fetchChallenges } = useChallengeStore();
+  const { draft, clearDraft, fetchChallenges, addDemoChallenge } = useChallengeStore();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
 
@@ -27,11 +51,38 @@ export default function PaymentScreen() {
   const handlePay = async () => {
     setLoading(true);
     try {
+      if (DEMO_MODE) {
+        addDemoChallenge(draft);
+        posthog.capture('challenge_created', {
+          stake_cents: draft.stake_amount_cents,
+          duration_days: draft.duration_days,
+          goal_count: draft.goals.length,
+          demo: true,
+        });
+        clearDraft();
+        router.replace('/(tabs)');
+        return;
+      }
+
       const clientSecret = await createPaymentIntent(totalCents);
       const { error: initError } = await initPaymentSheet({
         paymentIntentClientSecret: clientSecret,
         merchantDisplayName: 'Staked',
         returnURL: 'staked://payment-complete',
+        appearance: sheetAppearance,
+        applePay: {
+          merchantCountryCode: 'US',
+          cartItems: [
+            { label: 'Stake (refundable)', amount: dollars(draft.stake_amount_cents), paymentType: 'Immediate' },
+            { label: 'Platform fee', amount: dollars(PLATFORM_FEE_CENTS), paymentType: 'Immediate' },
+            { label: 'Staked', amount: dollars(totalCents), paymentType: 'Immediate' },
+          ],
+        },
+        googlePay: {
+          merchantCountryCode: 'US',
+          testEnv: true,
+          currencyCode: 'USD',
+        },
       });
       if (initError) throw new Error(initError.message);
 
@@ -102,6 +153,8 @@ export default function PaymentScreen() {
           onPress={handlePay}
           loading={loading}
         />
+
+        <Text style={styles.methods}> Pay with card, Apple Pay, or Google Pay</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -160,5 +213,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: 'center',
     paddingHorizontal: 8,
+  },
+  methods: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
   },
 });
