@@ -1,7 +1,12 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useStripe } from '@stripe/stripe-react-native';
+import {
+  PlatformPay,
+  PlatformPayButton,
+  useStripe,
+  usePlatformPay,
+} from '@stripe/stripe-react-native';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { posthog } from '@/lib/posthog';
@@ -39,7 +44,16 @@ const sheetAppearance = {
 export default function PaymentScreen() {
   const { draft, clearDraft, fetchChallenges, addDemoChallenge } = useChallengeStore();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const { isPlatformPaySupported, confirmPlatformPayPayment } = usePlatformPay();
   const [loading, setLoading] = useState(false);
+  const [walletSupported, setWalletSupported] = useState(false);
+
+  useEffect(() => {
+    if (DEMO_MODE) return;
+    isPlatformPaySupported({ googlePay: { testEnv: true } })
+      .then(setWalletSupported)
+      .catch(() => setWalletSupported(false));
+  }, [isPlatformPaySupported]);
 
   if (!draft) {
     router.replace('/challenge/new/details');
@@ -47,6 +61,54 @@ export default function PaymentScreen() {
   }
 
   const totalCents = draft.stake_amount_cents + PLATFORM_FEE_CENTS;
+
+  const finalizeChallenge = async (paymentIntentId: string) => {
+    await confirmChallengeStart(paymentIntentId, draft);
+    posthog.capture('challenge_created', {
+      stake_cents: draft.stake_amount_cents,
+      duration_days: draft.duration_days,
+      goal_count: draft.goals.length,
+    });
+    await fetchChallenges();
+    clearDraft();
+    router.replace('/(tabs)');
+  };
+
+  const handleWalletPay = async () => {
+    setLoading(true);
+    try {
+      const clientSecret = await createPaymentIntent(totalCents);
+      const { error, paymentIntent } = await confirmPlatformPayPayment(clientSecret, {
+        applePay: {
+          merchantCountryCode: 'US',
+          currencyCode: 'USD',
+          cartItems: [
+            { label: 'Stake (refundable)', amount: dollars(draft.stake_amount_cents), paymentType: PlatformPay.PaymentType.Immediate },
+            { label: 'Platform fee', amount: dollars(PLATFORM_FEE_CENTS), paymentType: PlatformPay.PaymentType.Immediate },
+            { label: 'Staked', amount: dollars(totalCents), paymentType: PlatformPay.PaymentType.Immediate },
+          ],
+        },
+        googlePay: {
+          merchantCountryCode: 'US',
+          currencyCode: 'USD',
+          testEnv: true,
+        },
+      });
+      if (error) {
+        if (error.code !== 'Canceled') {
+          posthog.capture('payment_failed', { error_code: error.code, method: 'wallet' });
+          Alert.alert('Payment Failed', error.message);
+        }
+        return;
+      }
+      await finalizeChallenge(paymentIntent!.id);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
+      Alert.alert('Error', message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePay = async () => {
     setLoading(true);
@@ -96,15 +158,7 @@ export default function PaymentScreen() {
       }
 
       const paymentIntentId = clientSecret.split('_secret_')[0];
-      await confirmChallengeStart(paymentIntentId, draft);
-      posthog.capture('challenge_created', {
-        stake_cents: draft.stake_amount_cents,
-        duration_days: draft.duration_days,
-        goal_count: draft.goals.length,
-      });
-      await fetchChallenges();
-      clearDraft();
-      router.replace('/(tabs)');
+      await finalizeChallenge(paymentIntentId);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
       Alert.alert('Error', message);
@@ -148,13 +202,34 @@ export default function PaymentScreen() {
           Stake is locked for {draft.duration_days} days. Protected funds are returned when the challenge ends.
         </Text>
 
+        {walletSupported && (
+          <>
+            <PlatformPayButton
+              type={PlatformPay.ButtonType.Pay}
+              appearance={PlatformPay.ButtonStyle.White}
+              disabled={loading}
+              onPress={handleWalletPay}
+              style={styles.walletButton}
+            />
+            <View style={styles.orRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>or</Text>
+              <View style={styles.orLine} />
+            </View>
+          </>
+        )}
+
         <Button
           title={`Pay ${formatCurrency(totalCents)} & Start`}
           onPress={handlePay}
           loading={loading}
         />
 
-        <Text style={styles.methods}> Pay with card, Apple Pay, or Google Pay</Text>
+        <Text style={styles.methods}>
+          {walletSupported
+            ? 'One-tap with Apple Pay or Google Pay, or pay by card'
+            : 'Pay securely with card, Apple Pay, or Google Pay'}
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -219,5 +294,22 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 4,
+  },
+  walletButton: {
+    width: '100%',
+    height: 50,
+  },
+  orRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 4,
+  },
+  orLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  orText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
 });
