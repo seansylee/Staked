@@ -54,7 +54,7 @@ export default function ChallengeDetailsScreen() {
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
 
-          <Text style={styles.stepText}>1 / 3</Text>
+          <Text style={styles.stepText}>1 / 4</Text>
           <Text style={styles.title}>Challenge Details</Text>
 
           <View style={styles.form}>

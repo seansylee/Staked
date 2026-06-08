@@ -11,6 +11,7 @@ import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { Button } from '@/components/ui/Button';
 import { posthog } from '@/lib/posthog';
 import { DEMO_MODE } from '@/lib/demo';
+import { getCharityById } from '@/lib/charities';
 import { confirmChallengeStart, createPaymentIntent } from '@/api/payments';
 import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
@@ -61,6 +62,7 @@ export default function PaymentScreen() {
   }
 
   const totalCents = draft.stake_amount_cents + PLATFORM_FEE_CENTS;
+  const charity = getCharityById(draft.charity_id);
 
   const finalizeChallenge = async (paymentIntentId: string) => {
     await confirmChallengeStart(paymentIntentId, draft);
@@ -174,13 +176,14 @@ export default function PaymentScreen() {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <Text style={styles.stepText}>3 / 3</Text>
+        <Text style={styles.stepText}>4 / 4</Text>
         <Text style={styles.title}>Review & Pay</Text>
 
         <View style={styles.card}>
           <SummaryRow label="Challenge" value={draft.name} />
           <SummaryRow label="Duration" value={`${draft.duration_days} days`} />
           <SummaryRow label="Goals" value={`${draft.goals.length}`} />
+          {charity && <SummaryRow label="Charity" value={`${charity.emoji} ${charity.name}`} />}
         </View>
 
         <View style={styles.card}>
@@ -199,7 +202,8 @@ export default function PaymentScreen() {
         </View>
 
         <Text style={styles.note}>
-          Stake is locked for {draft.duration_days} days. Protected funds are returned when the challenge ends.
+          Stake is locked for {draft.duration_days} days. Protected funds are returned when the challenge ends
+          {charity ? `; anything forfeited goes to ${charity.name}.` : '.'}
         </Text>
 
         {walletSupported && (

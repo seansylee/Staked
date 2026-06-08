@@ -29,6 +29,7 @@ const DEFAULT_DRAFT: ChallengeDraft = {
   stake_amount_cents: 10000, // $100
   duration_days: 30,
   goals: [],
+  charity_id: null,
 };
 
 function buildDemoMaps() {
@@ -247,6 +248,7 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
       stripe_refund_id: null,
       protected_amount_cents: null,
       forfeited_amount_cents: null,
+      charity_id: draft.charity_id,
       created_at: now.toISOString(),
     };
 

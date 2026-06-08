@@ -53,7 +53,7 @@ app/                    Expo Router screens
   (auth)/               Welcome, sign-up, sign-in
   (tabs)/               Dashboard, History, Settings (bottom tab navigator)
   challenge/
-    new/                3-step creation: details → goals → payment
+    new/                4-step creation: details → goals → charity → payment
     [id]/               Challenge detail (check-ins) + completion summary
 
 src/
@@ -61,6 +61,7 @@ src/
   types/index.ts        All shared TypeScript types
   lib/
     supabase.ts         Supabase client singleton
+    charities.ts        Dummy charity list (forfeited funds destination) + getCharityById
     demo.ts             Demo mode mock data (EXPO_PUBLIC_DEMO_MODE=true)
     notifications.ts    Push token registration + daily reminder scheduling
     posthog.ts          PostHog client
@@ -166,6 +167,10 @@ PaymentSheet is Stripe's pre-built UI — it renders Apple Pay / Google Pay as e
 - `StripeProvider` (`app/_layout.tsx`) and the `@stripe/stripe-react-native` config plugin (`app.json`) set `merchantIdentifier: "merchant.com.staked.app"` — Apple Pay requires this. Create the matching Merchant ID in the Apple Developer portal + a Stripe Apple Pay certificate before a real device build; the simulator shows the button but cannot complete a wallet charge.
 - `enableGooglePay: true` in the config plugin; `googlePay.testEnv: true` keeps it in Stripe test mode.
 - Demo mode (`EXPO_PUBLIC_DEMO_MODE=true`) bypasses Stripe entirely — `handlePay` calls `addDemoChallenge(draft)` so the full creation flow works locally without credentials.
+
+### Charity selection
+
+Step 3 of creation (`app/challenge/new/charity.tsx`) lets the user pick where forfeited funds go. **Dummy data for now** — three hard-coded charities in `src/lib/charities.ts`. The choice is stored on `ChallengeDraft.charity_id` / `Challenge.charity_id` and surfaced on the review screen, but it is **not yet persisted server-side or wired to any real payout** — the `charities` list, a `charity_id` DB column, and the actual donation flow are still TODO.
 
 ---
 

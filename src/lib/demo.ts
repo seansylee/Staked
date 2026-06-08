@@ -31,6 +31,7 @@ export const DEMO_CHALLENGES: Challenge[] = [
     stripe_refund_id: null,
     protected_amount_cents: null,
     forfeited_amount_cents: null,
+    charity_id: 'clean-water',
     created_at: daysAgo(28),
   },
   {
@@ -47,6 +48,7 @@ export const DEMO_CHALLENGES: Challenge[] = [
     stripe_refund_id: null,
     protected_amount_cents: null,
     forfeited_amount_cents: null,
+    charity_id: 'food-bank',
     created_at: daysAgo(10),
   },
 ];
