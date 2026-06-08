@@ -35,7 +35,7 @@ export default function GoalsScreen() {
   const onNext = () => {
     if (goals.length === 0) { Alert.alert('Add at least one goal'); return; }
     updateDraftGoals(goals);
-    router.push('/challenge/new/payment');
+    router.push('/challenge/new/charity');
   };
 
   return (
@@ -45,7 +45,7 @@ export default function GoalsScreen() {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <Text style={styles.stepText}>2 / 3</Text>
+        <Text style={styles.stepText}>2 / 4</Text>
         <Text style={styles.title}>Goals</Text>
         <Text style={styles.subtitle}>What will you commit to?</Text>
 
@@ -97,7 +97,7 @@ export default function GoalsScreen() {
         </View>
 
         <Button
-          title={`Next: Payment →  (${goals.length} goal${goals.length !== 1 ? 's' : ''})`}
+          title={`Next: Charity →  (${goals.length} goal${goals.length !== 1 ? 's' : ''})`}
           onPress={onNext}
           disabled={goals.length === 0}
         />

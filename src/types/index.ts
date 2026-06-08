@@ -25,6 +25,7 @@ export interface Challenge {
   stripe_refund_id: string | null;
   protected_amount_cents: number | null;
   forfeited_amount_cents: number | null;
+  charity_id: string | null;
   created_at: string;
 }
 
@@ -70,6 +71,7 @@ export interface ChallengeDraft {
   stake_amount_cents: number;
   duration_days: number;
   goals: GoalDraft[];
+  charity_id: string | null;
 }
 
 export interface GoalProgress {
