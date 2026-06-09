@@ -9,7 +9,10 @@ export default function WelcomeScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.hero}>
-          <Text style={styles.wordmark}>Staked</Text>
+          <View style={styles.wordmarkContainer}>
+            <View style={styles.wordmarkHighlight} />
+            <Text style={styles.wordmark}>Staked</Text>
+          </View>
           <Text style={styles.tagline}>
             Put real money behind{'\n'}your commitments.
           </Text>
@@ -40,10 +43,22 @@ const styles = StyleSheet.create({
     paddingBottom: 64,
     gap: 16,
   },
+  wordmarkContainer: {
+    alignSelf: 'flex-start',
+  },
+  wordmarkHighlight: {
+    position: 'absolute',
+    backgroundColor: colors.text,
+    top: -4,
+    bottom: -4,
+    left: -10,
+    right: -10,
+    transform: [{ rotate: '-1.5deg' }],
+  },
   wordmark: {
     fontSize: 64,
     fontFamily: 'HelveticaNeue-CondensedBlack',
-    color: colors.text,
+    color: colors.bg,
     letterSpacing: -0.5,
     transform: [{ scaleY: 1.35 }],
   },
