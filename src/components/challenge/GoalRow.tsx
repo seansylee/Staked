@@ -17,7 +17,12 @@ export function GoalRow({ progress, onCheckIn, loading }: GoalRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.info}>
-        <Text style={styles.name}>{goal.name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>{goal.name}</Text>
+          <TouchableOpacity style={styles.editBtn} onPress={() => {}} activeOpacity={0.7}>
+            <Text style={styles.editBtnText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.meta}>
           <View style={styles.dots}>
             {dots.map((filled, i) => (
@@ -59,7 +64,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   info: { flex: 1, gap: 7 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { fontSize: 15, fontWeight: '600', color: colors.text },
+  editBtn: { paddingHorizontal: 6, paddingVertical: 2 },
+  editBtnText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dots: { flexDirection: 'row', gap: 5 },
   dot: {
