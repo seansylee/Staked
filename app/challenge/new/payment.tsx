@@ -66,7 +66,7 @@ export default function PaymentScreen() {
   const charity = getCharityById(draft.charity_id);
 
   const finalizeChallenge = async (paymentIntentId: string) => {
-    await confirmChallengeStart(paymentIntentId, draft);
+    const challengeId = await confirmChallengeStart(paymentIntentId, draft);
     posthog.capture('challenge_created', {
       stake_cents: draft.stake_amount_cents,
       duration_days: draft.duration_days,
@@ -75,6 +75,7 @@ export default function PaymentScreen() {
     await fetchChallenges();
     clearDraft();
     router.replace('/(tabs)');
+    router.push(`/challenge/${challengeId}`);
   };
 
   const handleWalletPay = async () => {
@@ -117,7 +118,7 @@ export default function PaymentScreen() {
     setLoading(true);
     try {
       if (DEMO_MODE) {
-        addDemoChallenge(draft);
+        const challengeId = addDemoChallenge(draft);
         posthog.capture('challenge_created', {
           stake_cents: draft.stake_amount_cents,
           duration_days: draft.duration_days,
@@ -126,6 +127,7 @@ export default function PaymentScreen() {
         });
         clearDraft();
         router.replace('/(tabs)');
+        router.push(`/challenge/${challengeId}`);
         return;
       }
 
