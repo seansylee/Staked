@@ -20,6 +20,7 @@ export default function GoalsScreen() {
   const [name, setName] = useState('');
   const [count, setCount] = useState('1');
   const [goalWindow, setGoalWindow] = useState<Window>('daily');
+  const [addingGoal, setAddingGoal] = useState(false);
 
   const addGoal = () => {
     const trimmed = name.trim();
@@ -30,6 +31,7 @@ export default function GoalsScreen() {
     setName('');
     setCount('1');
     setGoalWindow('daily');
+    setAddingGoal(false);
   };
 
   const onNext = () => {
@@ -61,40 +63,46 @@ export default function GoalsScreen() {
           </View>
         ))}
 
-        <View style={styles.addForm}>
-          <Text style={styles.formTitle}>Add Goal</Text>
-          <Input placeholder="Goal name" value={name} onChangeText={setName} />
+        {(goals.length === 0 || addingGoal) && (
+          <View style={styles.addForm}>
+            <Text style={styles.formTitle}>{goals.length === 0 ? 'Add Goal' : 'Add Another Goal'}</Text>
+            <Input placeholder="Goal name" value={name} onChangeText={setName} />
 
-          <View style={styles.countRow}>
-            <View style={styles.countWrap}>
-              <Input
-                label="Times"
-                placeholder="3"
-                keyboardType="numeric"
-                value={count}
-                onChangeText={setCount}
-              />
-            </View>
-            <View style={styles.windowWrap}>
-              <Text style={styles.fieldLabel}>Per</Text>
-              <View style={styles.windowOptions}>
-                {WINDOWS.map((w) => (
-                  <TouchableOpacity
-                    key={w.value}
-                    style={[styles.pill, goalWindow === w.value && styles.pillActive]}
-                    onPress={() => setGoalWindow(w.value)}
-                  >
-                    <Text style={[styles.pillText, goalWindow === w.value && styles.pillActiveText]}>
-                      {w.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            <View style={styles.countRow}>
+              <View style={styles.countWrap}>
+                <Input
+                  label="Times"
+                  placeholder="3"
+                  keyboardType="numeric"
+                  value={count}
+                  onChangeText={setCount}
+                />
+              </View>
+              <View style={styles.windowWrap}>
+                <Text style={styles.fieldLabel}>Per</Text>
+                <View style={styles.windowOptions}>
+                  {WINDOWS.map((w) => (
+                    <TouchableOpacity
+                      key={w.value}
+                      style={[styles.pill, goalWindow === w.value && styles.pillActive]}
+                      onPress={() => setGoalWindow(w.value)}
+                    >
+                      <Text style={[styles.pillText, goalWindow === w.value && styles.pillActiveText]}>
+                        {w.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             </View>
-          </View>
 
-          <Button title="Add Goal" variant="secondary" onPress={addGoal} />
-        </View>
+            <Button title="Add Goal" variant="secondary" onPress={addGoal} />
+          </View>
+        )}
+
+        {goals.length > 0 && !addingGoal && (
+          <Button title="+ Add another goal" variant="secondary" onPress={() => setAddingGoal(true)} />
+        )}
 
         <Button
           title={`Next: Charity →  (${goals.length} goal${goals.length !== 1 ? 's' : ''})`}
