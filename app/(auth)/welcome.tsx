@@ -11,7 +11,9 @@ export default function WelcomeScreen() {
         <View style={styles.hero}>
           <View style={styles.wordmarkContainer}>
             <View style={styles.wordmarkHighlight} />
-            <Text style={styles.wordmark}>Staked</Text>
+            <Text style={styles.wordmark}>
+              <Text style={styles.wordmarkDollar}>$</Text>taked
+            </Text>
           </View>
           <Text style={styles.tagline}>
             Put real money behind{'\n'}your commitments.
@@ -61,6 +63,9 @@ const styles = StyleSheet.create({
     color: colors.bg,
     letterSpacing: -0.5,
     transform: [{ scaleY: 1.35 }],
+  },
+  wordmarkDollar: {
+    fontWeight: '900',
   },
   tagline: {
     fontSize: 22,
