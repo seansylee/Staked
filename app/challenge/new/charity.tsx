@@ -1,6 +1,6 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { CHARITIES } from '@/lib/charities';
@@ -11,10 +11,11 @@ export default function CharityScreen() {
   const { draft, setDraft } = useChallengeStore();
   const [selected, setSelected] = useState<string | null>(draft?.charity_id ?? null);
 
-  if (!draft) {
-    router.replace('/challenge/new/details');
-    return null;
-  }
+  useEffect(() => {
+    if (!draft) router.replace('/challenge/new/details');
+  }, [draft]);
+
+  if (!draft) return null;
 
   const onNext = () => {
     if (!selected) return;

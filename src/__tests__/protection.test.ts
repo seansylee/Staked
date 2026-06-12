@@ -15,6 +15,7 @@ const makeChallenge = (override: Partial<Challenge> = {}): Challenge => ({
   stripe_refund_id: null,
   protected_amount_cents: null,
   forfeited_amount_cents: null,
+  charity_id: null,
   created_at: '2024-01-01T00:00:00Z',
   ...override,
 });

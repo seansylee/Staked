@@ -56,10 +56,11 @@ export default function PaymentScreen() {
       .catch(() => setWalletSupported(false));
   }, [isPlatformPaySupported]);
 
-  if (!draft) {
-    router.replace('/challenge/new/details');
-    return null;
-  }
+  useEffect(() => {
+    if (!draft) router.replace('/challenge/new/details');
+  }, [draft]);
+
+  if (!draft) return null;
 
   const totalCents = draft.stake_amount_cents + PLATFORM_FEE_CENTS;
   const charity = getCharityById(draft.charity_id);
