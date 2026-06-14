@@ -101,7 +101,12 @@ export default function GoalsScreen() {
         )}
 
         {goals.length > 0 && !addingGoal && (
-          <Button title="+ Add another goal" variant="secondary" onPress={() => setAddingGoal(true)} />
+          <Button
+            title="+ Add another goal"
+            variant="secondary"
+            onPress={() => setAddingGoal(true)}
+            style={styles.addAnotherButton}
+          />
         )}
 
         <Button
@@ -171,6 +176,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   pillActive: { backgroundColor: colors.white, borderColor: colors.white },
+  addAnotherButton: { borderColor: colors.borderLight, borderWidth: 1.5 },
   pillText: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
   pillActiveText: { color: colors.black },
 });
