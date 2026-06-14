@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
       duration_days: draftChallenge.duration_days,
       start_date: startDate,
       end_date: endDate,
+      charity_id: draftChallenge.charity_id ?? null,
       stripe_payment_intent_id: payment_intent_id,
     })
     .select()

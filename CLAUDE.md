@@ -170,7 +170,9 @@ PaymentSheet is Stripe's pre-built UI — it renders Apple Pay / Google Pay as e
 
 ### Charity selection
 
-Step 3 of creation (`app/challenge/new/charity.tsx`) lets the user pick where forfeited funds go. **Dummy data for now** — three hard-coded charities in `src/lib/charities.ts`. The choice is stored on `ChallengeDraft.charity_id` / `Challenge.charity_id` and surfaced on the review screen, but it is **not yet persisted server-side or wired to any real payout** — the `charities` list, a `charity_id` DB column, and the actual donation flow are still TODO.
+Step 3 of creation (`app/challenge/new/charity.tsx`) lets the user pick where forfeited funds go. **Dummy charity data for now** — three hard-coded charities in `src/lib/charities.ts`. The choice is stored on `ChallengeDraft.charity_id` / `Challenge.charity_id`, surfaced on the review screen, and **now persisted server-side**: migration `002_add_charity_id.sql` adds the `challenges.charity_id` column and `confirm-challenge-start` writes it.
+
+**Donation model = Option A (platform-donates).** Forfeited funds stay in the platform's Stripe balance; Staked donates to the chosen charity in a monthly batch. There is **no per-challenge Stripe payout to charities** — that deliberately avoids money-transmitter / MSB exposure. UI copy reflects this ("Staked holds your stake… anything forfeited is donated to {charity} at the end of the month"). A real `charities` table with Stripe Connect accounts + automated transfers is the future Option B path, still TODO. See `docs/escrow-feasibility.md`.
 
 ---
 

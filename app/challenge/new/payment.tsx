@@ -205,8 +205,11 @@ export default function PaymentScreen() {
         </View>
 
         <Text style={styles.note}>
-          Stake is locked for {draft.duration_days} days. Protected funds are returned when the challenge ends
-          {charity ? `; anything forfeited goes to ${charity.name}.` : '.'}
+          Staked holds your stake for {draft.duration_days} days. Protected funds are returned to you
+          when the challenge ends
+          {charity
+            ? `; anything forfeited is donated to ${charity.name} at the end of the month.`
+            : '.'}
         </Text>
 
         {walletSupported && (
