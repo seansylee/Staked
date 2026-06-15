@@ -33,7 +33,8 @@ export default function CharityScreen() {
         <Text style={styles.stepText}>3 / 4</Text>
         <Text style={styles.title}>Pick a Charity</Text>
         <Text style={styles.subtitle}>
-          If you miss a goal, the forfeited money is donated to the cause you choose.
+          If you miss a goal, that money is held by Staked and donated to the cause you choose
+          at the end of the month.
         </Text>
 
         {CHARITIES.map((c) => {
