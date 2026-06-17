@@ -155,9 +155,15 @@ All tables have RLS (users see only their own data). Auto-trigger creates `profi
 2. App presents Stripe PaymentSheet (native UI)
 3. On success, app calls `confirm-challenge-start` Edge Function with payment_intent_id
 4. Edge Function verifies status=succeeded with Stripe, then writes challenge+goals to DB
-5. On completion, `complete-challenge` Edge Function runs protection calc server-side and issues refund
+5. On completion, `complete-challenge` Edge Function runs protection calc server-side, issues refund, and records payment as `pending`
+6. Stripe fires `refund.updated` webhook → `handle-stripe-webhook` Edge Function reconciles payment and challenge `refund_status` to `succeeded` or `failed`
 
 **The Stripe secret key only lives in Supabase Edge Function env — never in the app.**
+
+**Webhook setup (one-time):** In the Stripe dashboard, create a webhook pointing to `https://xctocyxiwnjdltxqlqyl.supabase.co/functions/v1/handle-stripe-webhook` listening for `refund.updated`. Copy the signing secret and run:
+```bash
+npx supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_... --project-ref xctocyxiwnjdltxqlqyl
+```
 
 ### Wallet payments (Apple Pay / Google Pay)
 
@@ -199,6 +205,7 @@ export SUPABASE_ACCESS_TOKEN=<personal access token>
 npx supabase functions deploy create-payment-intent --project-ref xctocyxiwnjdltxqlqyl
 npx supabase functions deploy confirm-challenge-start --project-ref xctocyxiwnjdltxqlqyl
 npx supabase functions deploy complete-challenge --project-ref xctocyxiwnjdltxqlqyl
+npx supabase functions deploy handle-stripe-webhook --project-ref xctocyxiwnjdltxqlqyl
 ```
 
 ---

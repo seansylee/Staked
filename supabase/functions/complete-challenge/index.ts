@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
     amount: protectedCents,
   });
 
-  // Update challenge
+  // Update challenge — refund_status starts pending; webhook reconciles to succeeded/failed
   const { data: updatedChallenge } = await supabase
     .from('challenges')
     .update({
@@ -151,19 +151,20 @@ Deno.serve(async (req) => {
       protected_amount_cents: protectedCents,
       forfeited_amount_cents: forfeitedCents,
       stripe_refund_id: refund.id,
+      refund_status: 'pending',
     })
     .eq('id', challenge_id)
     .select()
     .single();
 
-  // Record refund payment
+  // Record refund payment as pending; webhook updates to succeeded/failed
   await supabase.from('payments').insert({
     challenge_id,
     user_id: user.id,
     type: 'refund',
     amount_cents: protectedCents,
     stripe_id: refund.id,
-    status: 'succeeded',
+    status: 'pending',
   });
 
   return new Response(
