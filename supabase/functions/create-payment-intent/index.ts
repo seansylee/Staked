@@ -53,13 +53,19 @@ Deno.serve(async (req) => {
       .eq('id', user.id);
   }
 
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: amount_cents,
-    currency: 'usd',
-    customer: customerId,
-    metadata: { user_id: user.id },
-    automatic_payment_methods: { enabled: true },
-  });
+  let paymentIntent;
+  try {
+    paymentIntent = await stripe.paymentIntents.create({
+      amount: amount_cents,
+      currency: 'usd',
+      customer: customerId,
+      metadata: { user_id: user.id },
+      automatic_payment_methods: { enabled: true },
+    });
+  } catch (err) {
+    console.error('Stripe error:', err);
+    return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
 
   return new Response(
     JSON.stringify({ client_secret: paymentIntent.client_secret }),
