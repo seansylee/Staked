@@ -5,8 +5,6 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-04-10',
 });
 
-// --- Shared computation logic (mirrored from client) ---
-
 type WindowType = 'daily' | 'weekly' | 'monthly';
 
 function getWindowKey(date: Date, window: WindowType): string {
@@ -54,44 +52,41 @@ function daysPerPeriod(window: WindowType): number {
   return window === 'daily' ? 1 : window === 'weekly' ? 7 : 30;
 }
 
-interface Goal { id: string; target_count: number; goal_window: WindowType; }
-interface CheckIn { goal_id: string; window_key: string; }
-interface Challenge { stake_amount: number; duration_days: number; start_date: string; end_date: string; }
+interface Challenge {
+  stake_amount: number;
+  duration_days: number;
+  start_date: string;
+  target_count: number;
+  goal_window: WindowType;
+}
+
+interface CheckIn { window_key: string; }
 
 function computeProtectionCents(
   challenge: Challenge,
-  goals: Goal[],
   checkIns: CheckIn[],
   ref: Date = new Date()
 ): { protectedCents: number; forfeitedCents: number } {
-  const stake = challenge.stake_amount;
-  const dpv = stake / challenge.duration_days;
+  const { stake_amount, duration_days, start_date, target_count, goal_window } = challenge;
+  const dpv = stake_amount / duration_days;
 
-  const checkInMap: Record<string, Record<string, number>> = {};
+  const countByKey: Record<string, number> = {};
   for (const ci of checkIns) {
-    if (!checkInMap[ci.goal_id]) checkInMap[ci.goal_id] = {};
-    checkInMap[ci.goal_id][ci.window_key] = (checkInMap[ci.goal_id][ci.window_key] ?? 0) + 1;
+    countByKey[ci.window_key] = (countByKey[ci.window_key] ?? 0) + 1;
   }
 
-  let totalMissedDayEquivalents = 0;
-
-  for (const goal of goals) {
-    const elapsed = countElapsedPeriods(challenge.start_date, goal.goal_window, ref);
-    const byKey = checkInMap[goal.id] ?? {};
-    let completed = 0;
-    for (const count of Object.values(byKey)) {
-      if (count >= goal.target_count) completed++;
-    }
-    completed = Math.min(completed, elapsed);
-    const missed = elapsed - completed;
-    totalMissedDayEquivalents += Math.min(missed * daysPerPeriod(goal.goal_window), challenge.duration_days) / (goals.length || 1);
+  const elapsed = countElapsedPeriods(start_date, goal_window, ref);
+  let completedPeriods = 0;
+  for (const count of Object.values(countByKey)) {
+    if (count >= target_count) completedPeriods++;
   }
+  completedPeriods = Math.min(completedPeriods, elapsed);
+  const missedPeriods = elapsed - completedPeriods;
+  const missedDays = Math.min(missedPeriods * daysPerPeriod(goal_window), duration_days);
 
-  const forfeitedCents = Math.min(Math.round(totalMissedDayEquivalents * dpv), stake);
-  return { protectedCents: stake - forfeitedCents, forfeitedCents };
+  const forfeitedCents = Math.min(Math.round(missedDays * dpv), stake_amount);
+  return { protectedCents: stake_amount - forfeitedCents, forfeitedCents };
 }
-
-// --- Edge Function ---
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -125,25 +120,22 @@ Deno.serve(async (req) => {
     return new Response('Challenge not found', { status: 404 });
   }
 
-  const [{ data: goals }, { data: checkIns }] = await Promise.all([
-    supabase.from('goals').select('*').eq('challenge_id', challenge_id),
-    supabase.from('check_ins').select('*').eq('challenge_id', challenge_id),
-  ]);
+  const { data: checkIns } = await supabase
+    .from('check_ins')
+    .select('window_key')
+    .eq('challenge_id', challenge_id);
 
   const { protectedCents, forfeitedCents } = computeProtectionCents(
     challenge,
-    goals ?? [],
     checkIns ?? [],
     new Date()
   );
 
-  // Issue Stripe refund for protected amount
   const refund = await stripe.refunds.create({
     payment_intent: challenge.stripe_payment_intent_id,
     amount: protectedCents,
   });
 
-  // Update challenge — refund_status starts pending; webhook reconciles to succeeded/failed
   const { data: updatedChallenge } = await supabase
     .from('challenges')
     .update({
@@ -157,7 +149,6 @@ Deno.serve(async (req) => {
     .select()
     .single();
 
-  // Record refund payment as pending; webhook updates to succeeded/failed
   await supabase.from('payments').insert({
     challenge_id,
     user_id: user.id,

@@ -33,13 +33,11 @@ Deno.serve(async (req) => {
     return new Response('Missing required fields', { status: 400 });
   }
 
-  // Verify payment succeeded with Stripe
   const paymentIntent = await stripe.paymentIntents.retrieve(payment_intent_id);
   if (paymentIntent.status !== 'succeeded') {
     return new Response('Payment not completed', { status: 400 });
   }
 
-  // Verify the payment intent belongs to this user
   if (paymentIntent.metadata.user_id !== user.id) {
     return new Response('Unauthorized', { status: 403 });
   }
@@ -50,7 +48,6 @@ Deno.serve(async (req) => {
     .toISOString()
     .slice(0, 10);
 
-  // Create challenge row
   const { data: challenge, error: challengeError } = await supabase
     .from('challenges')
     .insert({
@@ -61,6 +58,8 @@ Deno.serve(async (req) => {
       duration_days: draftChallenge.duration_days,
       start_date: startDate,
       end_date: endDate,
+      target_count: draftChallenge.target_count,
+      goal_window: draftChallenge.goal_window,
       charity_id: draftChallenge.charity_id ?? null,
       stripe_payment_intent_id: payment_intent_id,
     })
@@ -71,19 +70,6 @@ Deno.serve(async (req) => {
     return new Response('Failed to create challenge', { status: 500 });
   }
 
-  // Create goal rows
-  if (draftChallenge.goals?.length > 0) {
-    await supabase.from('goals').insert(
-      draftChallenge.goals.map((g: { name: string; target_count: number; goal_window: string }) => ({
-        challenge_id: challenge.id,
-        name: g.name,
-        target_count: g.target_count,
-        goal_window: g.goal_window,
-      }))
-    );
-  }
-
-  // Record payment
   await supabase.from('payments').insert({
     challenge_id: challenge.id,
     user_id: user.id,
