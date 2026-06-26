@@ -19,14 +19,12 @@ export default function ChallengeDetailScreen() {
   const [completing, setCompleting] = useState(false);
 
   const challenges = useChallengeStore((s) => s.challenges);
-  const goalsMap = useChallengeStore((s) => s.goalsMap);
   const checkInsMap = useChallengeStore((s) => s.checkInsMap);
   const subscribeToCheckIns = useChallengeStore((s) => s.subscribeToCheckIns);
   const unsubscribeAll = useChallengeStore((s) => s.unsubscribeAll);
   const setChallengeCompleted = useChallengeStore((s) => s.setChallengeCompleted);
 
   const challenge = challenges.find((c) => c.id === id);
-  const goals = goalsMap[id] ?? [];
   const checkIns = checkInsMap[id] ?? [];
 
   const { logCheckIn, loading: checkInLoading } = useCheckIn(id);
@@ -37,13 +35,13 @@ export default function ChallengeDetailScreen() {
   }, [id, subscribeToCheckIns, unsubscribeAll]);
 
   const summary = useMemo(
-    () => challenge ? computeProtection(challenge, goals, checkIns) : null,
-    [challenge, goals, checkIns]
+    () => challenge ? computeProtection(challenge, checkIns) : null,
+    [challenge, checkIns]
   );
 
-  const goalProgressList = useMemo(
-    () => goals.map((g) => computeGoalProgress(g, checkIns)),
-    [goals, checkIns]
+  const progress = useMemo(
+    () => challenge ? computeGoalProgress(challenge, checkIns) : null,
+    [challenge, checkIns]
   );
 
   const handleComplete = () => {
@@ -77,7 +75,7 @@ export default function ChallengeDetailScreen() {
     );
   };
 
-  if (!challenge || !summary) {
+  if (!challenge || !summary || !progress) {
     return (
       <SafeAreaView style={styles.container}>
         <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.back}>
@@ -117,16 +115,18 @@ export default function ChallengeDetailScreen() {
           <StakeSummaryPanel summary={summary} />
         </View>
 
-        <View style={styles.goalsSection}>
-          <Text style={styles.sectionLabel}>Goals</Text>
-          {goalProgressList.map((progress) => (
-            <GoalRow
-              key={progress.goal.id}
-              progress={progress}
-              onCheckIn={logCheckIn}
-              loading={checkInLoading === progress.goal.id}
-            />
-          ))}
+        <View style={styles.checkInSection}>
+          <Text style={styles.sectionLabel}>
+            {challenge.target_count}× per {challenge.goal_window}
+          </Text>
+          <GoalRow
+            currentCount={progress.currentCount}
+            targetCount={progress.targetCount}
+            windowLabel={progress.windowLabel}
+            isCompleted={progress.isCompleted}
+            onCheckIn={logCheckIn}
+            loading={checkInLoading}
+          />
         </View>
 
         {canComplete && (
@@ -171,10 +171,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginTop: 12,
   },
-  goalsSection: {
+  checkInSection: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     paddingHorizontal: 18,
+    paddingBottom: 4,
     borderWidth: 1,
     borderColor: colors.border,
     marginTop: 10,
@@ -185,7 +186,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 4,
   },
   completeBtn: { marginTop: 16 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },

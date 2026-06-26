@@ -13,20 +13,17 @@ interface ChallengeCardProps {
 }
 
 export function ChallengeCard({ challenge }: ChallengeCardProps) {
-  const goalsMap = useChallengeStore((s) => s.goalsMap);
   const checkInsMap = useChallengeStore((s) => s.checkInsMap);
-
-  const goals = goalsMap[challenge.id] ?? [];
   const checkIns = checkInsMap[challenge.id] ?? [];
 
   const summary = useMemo(
-    () => computeProtection(challenge, goals, checkIns),
-    [challenge, goals, checkIns]
+    () => computeProtection(challenge, checkIns),
+    [challenge, checkIns]
   );
 
   const status = useMemo(
-    () => computeDashboardStatus(challenge, goals, checkIns),
-    [challenge, goals, checkIns]
+    () => computeDashboardStatus(challenge, checkIns),
+    [challenge, checkIns]
   );
 
   const daysLeft = daysRemainingForChallenge(challenge);
@@ -62,19 +59,16 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
         />
       </View>
 
-      {status.nudges.length > 0 && (
+      {status.nudge && (
         <View style={styles.nudgeBox}>
-          {status.nudges.map((n) => (
-            <View key={n.goalName} style={styles.nudgeRow}>
-              <Text style={styles.nudgeDot}>·</Text>
-              <Text style={styles.nudgeText}>
-                {n.goalName}
-                <Text style={styles.nudgeNeeded}> {n.needed}×</Text>
-                <Text style={styles.nudgeDeadline}> {n.deadline}</Text>
-                <Text style={styles.nudgeRisk}>  {formatCurrency(n.atRiskCents)} at stake</Text>
-              </Text>
-            </View>
-          ))}
+          <View style={styles.nudgeRow}>
+            <Text style={styles.nudgeDot}>·</Text>
+            <Text style={styles.nudgeText}>
+              <Text style={styles.nudgeNeeded}>{status.nudge.needed}×</Text>
+              <Text style={styles.nudgeDeadline}> by {status.nudge.deadline}</Text>
+              <Text style={styles.nudgeRisk}>  {formatCurrency(status.nudge.atRiskCents)} at stake</Text>
+            </Text>
+          </View>
         </View>
       )}
     </TouchableOpacity>
@@ -132,10 +126,7 @@ const styles = StyleSheet.create({
   statusEmoji: { fontSize: 13 },
   statusText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   progressSection: { marginTop: 10, marginBottom: 4 },
-  nudgeBox: {
-    marginTop: 8,
-    gap: 3,
-  },
+  nudgeBox: { marginTop: 8 },
   nudgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   nudgeDot: { fontSize: 12, color: colors.textMuted },
   nudgeText: { fontSize: 12, color: colors.textSecondary },

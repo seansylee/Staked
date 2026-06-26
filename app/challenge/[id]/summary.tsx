@@ -9,10 +9,8 @@ import { formatCurrency, formatDate } from '@/utils/formatting';
 export default function CompletionSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const challenges = useChallengeStore((s) => s.challenges);
-  const goalsMap = useChallengeStore((s) => s.goalsMap);
 
   const challenge = challenges.find((c) => c.id === id);
-  const goals = goalsMap[id] ?? [];
 
   if (!challenge || challenge.status !== 'completed') {
     return (
@@ -29,6 +27,7 @@ export default function CompletionSummaryScreen() {
   const successRate = challenge.stake_amount > 0
     ? Math.round((protectedCents / challenge.stake_amount) * 100)
     : 100;
+  const windowLabel = challenge.goal_window === 'daily' ? 'day' : challenge.goal_window === 'weekly' ? 'week' : 'month';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -58,19 +57,8 @@ export default function CompletionSummaryScreen() {
           <Row label="Start" value={formatDate(challenge.start_date)} />
           <Row label="End" value={formatDate(challenge.end_date)} />
           <Row label="Duration" value={`${challenge.duration_days} days`} />
+          <Row label="Goal" value={`${challenge.target_count}× per ${windowLabel}`} />
         </View>
-
-        {goals.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Goals</Text>
-            {goals.map((goal, i) => (
-              <View key={goal.id} style={[styles.goalRow, i < goals.length - 1 && styles.goalRowBorder]}>
-                <Text style={styles.goalName}>{goal.name}</Text>
-                <Text style={styles.goalTarget}>{goal.target_count}×/{goal.goal_window}</Text>
-              </View>
-            ))}
-          </View>
-        )}
 
         <Button title="Back to Dashboard" onPress={() => router.replace('/(tabs)')} />
       </ScrollView>
@@ -131,16 +119,4 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 4 },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  goalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  goalRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
-  goalName: { fontSize: 15, color: colors.text, fontWeight: '500' },
-  goalTarget: { fontSize: 13, color: colors.textSecondary },
 });

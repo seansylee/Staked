@@ -64,13 +64,15 @@ export default function PaymentScreen() {
 
   const totalCents = draft.stake_amount_cents + PLATFORM_FEE_CENTS;
   const charity = getCharityById(draft.charity_id);
+  const windowLabel = draft.goal_window === 'daily' ? 'day' : draft.goal_window === 'weekly' ? 'week' : 'month';
 
   const finalizeChallenge = async (paymentIntentId: string) => {
     const challengeId = await confirmChallengeStart(paymentIntentId, draft);
     posthog.capture('challenge_created', {
       stake_cents: draft.stake_amount_cents,
       duration_days: draft.duration_days,
-      goal_count: draft.goals.length,
+      goal_window: draft.goal_window,
+      target_count: draft.target_count,
     });
     await fetchChallenges();
     clearDraft();
@@ -122,7 +124,8 @@ export default function PaymentScreen() {
         posthog.capture('challenge_created', {
           stake_cents: draft.stake_amount_cents,
           duration_days: draft.duration_days,
-          goal_count: draft.goals.length,
+          goal_window: draft.goal_window,
+          target_count: draft.target_count,
           demo: true,
         });
         clearDraft();
@@ -179,22 +182,14 @@ export default function PaymentScreen() {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <Text style={styles.stepText}>4 / 4</Text>
+        <Text style={styles.stepText}>3 / 3</Text>
         <Text style={styles.title}>Review & Pay</Text>
 
         <View style={styles.card}>
           <SummaryRow label="Challenge" value={draft.name} />
           <SummaryRow label="Duration" value={`${draft.duration_days} days`} />
-          <SummaryRow label="Goals" value={`${draft.goals.length}`} />
+          <SummaryRow label="Goal" value={`${draft.target_count}× per ${windowLabel}`} />
           {charity && <SummaryRow label="Charity" value={`${charity.emoji} ${charity.name}`} />}
-        </View>
-
-        <View style={styles.card}>
-          {draft.goals.map((g, i) => (
-            <Text key={i} style={styles.goalLine}>
-              {g.name}  ·  {g.target_count}×/{g.goal_window}
-            </Text>
-          ))}
         </View>
 
         <View style={styles.card}>
@@ -290,7 +285,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     gap: 12,
   },
-  goalLine: { fontSize: 14, color: colors.textSecondary },
   divider: { height: 1, backgroundColor: colors.border },
   note: {
     fontSize: 12,

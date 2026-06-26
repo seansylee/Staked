@@ -30,7 +30,7 @@ export default function CharityScreen() {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <Text style={styles.stepText}>3 / 4</Text>
+        <Text style={styles.stepText}>2 / 3</Text>
         <Text style={styles.title}>Pick a Charity</Text>
         <Text style={styles.subtitle}>
           If you miss a goal, that money is held by Staked and donated to the cause you choose
