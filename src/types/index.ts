@@ -21,6 +21,8 @@ export interface Challenge {
   start_date: string; // YYYY-MM-DD
   end_date: string; // YYYY-MM-DD
   status: ChallengeStatus;
+  target_count: number;
+  goal_window: Window;
   stripe_payment_intent_id: string | null;
   stripe_refund_id: string | null;
   protected_amount_cents: number | null;
@@ -29,18 +31,8 @@ export interface Challenge {
   created_at: string;
 }
 
-export interface Goal {
-  id: string;
-  challenge_id: string;
-  name: string;
-  target_count: number;
-  goal_window: Window;
-  created_at: string;
-}
-
 export interface CheckIn {
   id: string;
-  goal_id: string;
   challenge_id: string;
   user_id: string;
   logged_at: string;
@@ -58,28 +50,13 @@ export interface Payment {
   created_at: string;
 }
 
-// UI / computation types
-
-export interface GoalDraft {
-  name: string;
-  target_count: number;
-  goal_window: Window;
-}
-
 export interface ChallengeDraft {
   name: string;
   stake_amount_cents: number;
   duration_days: number;
-  goals: GoalDraft[];
+  target_count: number;
+  goal_window: Window;
   charity_id: string | null;
-}
-
-export interface GoalProgress {
-  goal: Goal;
-  currentCount: number;
-  targetCount: number;
-  windowLabel: string;
-  isCompleted: boolean;
 }
 
 export interface ProtectionSummary {
@@ -93,8 +70,6 @@ export interface ProtectionSummary {
 
 export interface CompletionSummary {
   challenge: Challenge;
-  originalStake: number; // cents
-  protectedFunds: number; // cents
-  forfeitedFunds: number; // cents
-  goalBreakdown: { goal: Goal; completedPeriods: number; totalPeriods: number }[];
+  protectedCents: number;
+  forfeitedCents: number;
 }

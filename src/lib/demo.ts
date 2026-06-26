@@ -1,4 +1,4 @@
-import { Challenge, CheckIn, Goal } from '@/types';
+import { Challenge, CheckIn } from '@/types';
 
 export const DEMO_MODE = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 
@@ -27,6 +27,8 @@ export const DEMO_CHALLENGES: Challenge[] = [
     start_date: daysAgo(28),
     end_date: daysFromNow(62),
     status: 'active',
+    target_count: 3,
+    goal_window: 'weekly',
     stripe_payment_intent_id: 'pi_demo',
     stripe_refund_id: null,
     protected_amount_cents: null,
@@ -44,6 +46,8 @@ export const DEMO_CHALLENGES: Challenge[] = [
     start_date: daysAgo(10),
     end_date: daysFromNow(20),
     status: 'active',
+    target_count: 1,
+    goal_window: 'daily',
     stripe_payment_intent_id: 'pi_demo2',
     stripe_refund_id: null,
     protected_amount_cents: null,
@@ -51,12 +55,6 @@ export const DEMO_CHALLENGES: Challenge[] = [
     charity_id: 'food-bank',
     created_at: daysAgo(10),
   },
-];
-
-export const DEMO_GOALS: Goal[] = [
-  { id: 'g1', challenge_id: 'c1', name: 'Gym', target_count: 3, goal_window: 'weekly', created_at: daysAgo(28) },
-  { id: 'g2', challenge_id: 'c1', name: 'Run', target_count: 2, goal_window: 'weekly', created_at: daysAgo(28) },
-  { id: 'g3', challenge_id: 'c2', name: 'Deep Work Session', target_count: 1, goal_window: 'daily', created_at: daysAgo(10) },
 ];
 
 function isoWeekKey(d: Date): string {
@@ -76,16 +74,15 @@ function dayAgo(n: number): string {
   return fmt(new Date(today.getTime() - n * 86_400_000));
 }
 
-const w0 = isoWeekKey(today);   // current week
+const w0 = isoWeekKey(today);
 const w1 = weekAgo(1);
 const w2 = weekAgo(2);
 const w3 = weekAgo(3);
 const todayKey = fmt(today);
 
 let ciId = 0;
-const ci = (goalId: string, challengeId: string, windowKey: string): CheckIn => ({
+const ci = (challengeId: string, windowKey: string): CheckIn => ({
   id: `ci${++ciId}`,
-  goal_id: goalId,
   challenge_id: challengeId,
   user_id: 'demo-user',
   logged_at: today.toISOString(),
@@ -93,25 +90,17 @@ const ci = (goalId: string, challengeId: string, windowKey: string): CheckIn => 
 });
 
 export const DEMO_CHECK_INS: CheckIn[] = [
-  // Summer Fitness — 3 past perfect weeks, current week gym 2/3 (incomplete), run 2/2 (done)
-  // Week -3: gym 3/3, run 2/2
-  ci('g1','c1',w3), ci('g1','c1',w3), ci('g1','c1',w3),
-  ci('g2','c1',w3), ci('g2','c1',w3),
-  // Week -2: gym 3/3, run 2/2
-  ci('g1','c1',w2), ci('g1','c1',w2), ci('g1','c1',w2),
-  ci('g2','c1',w2), ci('g2','c1',w2),
-  // Week -1: gym 3/3, run 2/2
-  ci('g1','c1',w1), ci('g1','c1',w1), ci('g1','c1',w1),
-  ci('g2','c1',w1), ci('g2','c1',w1),
-  // This week: gym 2/3 (at risk if late in week), run 2/2
-  ci('g1','c1',w0), ci('g1','c1',w0),
-  ci('g2','c1',w0), ci('g2','c1',w0),
+  // Summer Fitness — 3× per week, 3 past perfect weeks, current week 2/3
+  ci('c1', w3), ci('c1', w3), ci('c1', w3),
+  ci('c1', w2), ci('c1', w2), ci('c1', w2),
+  ci('c1', w1), ci('c1', w1), ci('c1', w1),
+  ci('c1', w0), ci('c1', w0),
 
-  // Deep Work — 5 past days complete, today done
-  ci('g3','c2',dayAgo(5)),
-  ci('g3','c2',dayAgo(4)),
-  ci('g3','c2',dayAgo(3)),
-  ci('g3','c2',dayAgo(2)),
-  ci('g3','c2',dayAgo(1)),
-  ci('g3','c2',todayKey),
+  // Deep Work — 1× per day, 5 past days complete, today done
+  ci('c2', dayAgo(5)),
+  ci('c2', dayAgo(4)),
+  ci('c2', dayAgo(3)),
+  ci('c2', dayAgo(2)),
+  ci('c2', dayAgo(1)),
+  ci('c2', todayKey),
 ];

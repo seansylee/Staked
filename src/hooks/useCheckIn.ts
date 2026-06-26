@@ -4,20 +4,20 @@ import { useChallengeStore } from '@/store/useChallengeStore';
 import { useUIStore } from '@/store/useUIStore';
 
 export function useCheckIn(challengeId: string) {
-  const [loading, setLoading] = useState<string | null>(null); // goalId being logged
+  const [loading, setLoading] = useState(false);
   const addCheckIn = useChallengeStore((s) => s.addCheckIn);
   const showToast = useUIStore((s) => s.showToast);
 
-  const logCheckIn = async (goalId: string) => {
+  const logCheckIn = async () => {
     if (loading) return;
-    setLoading(goalId);
+    setLoading(true);
     try {
-      await addCheckIn(goalId, challengeId);
-      posthog.capture('check_in_logged', { challenge_id: challengeId, goal_id: goalId });
+      await addCheckIn(challengeId);
+      posthog.capture('check_in_logged', { challenge_id: challengeId });
     } catch {
       showToast('Failed to log check-in. Please try again.', 'error');
     } finally {
-      setLoading(null);
+      setLoading(false);
     }
   };
 
