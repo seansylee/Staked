@@ -6,7 +6,7 @@ import {
   usePlatformPay,
 } from '@stripe/stripe-react-native';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { posthog } from '@/lib/posthog';
@@ -50,6 +50,7 @@ export default function PaymentScreen() {
   const { isPlatformPaySupported, confirmPlatformPayPayment } = usePlatformPay();
   const [loading, setLoading] = useState(false);
   const [walletSupported, setWalletSupported] = useState(false);
+  const completing = useRef(false);
 
   useEffect(() => {
     if (DEMO_MODE) return;
@@ -59,7 +60,7 @@ export default function PaymentScreen() {
   }, [isPlatformPaySupported]);
 
   useEffect(() => {
-    if (!draft) router.replace('/challenge/new/details');
+    if (!draft && !completing.current) router.replace('/challenge/new/details');
   }, [draft]);
 
   if (!draft) return null;
@@ -79,6 +80,7 @@ export default function PaymentScreen() {
     await fetchChallenges();
     const dollars = Math.round(draft.stake_amount_cents / 100);
     showToast(`🔥 ${draft.name} is live! $${dollars} is on the line — make it count.`);
+    completing.current = true;
     clearDraft();
     router.replace('/(tabs)');
   };
@@ -133,6 +135,7 @@ export default function PaymentScreen() {
         });
         const dollars = Math.round(draft.stake_amount_cents / 100);
         showToast(`🔥 ${draft.name} is live! $${dollars} is on the line — make it count.`);
+        completing.current = true;
         clearDraft();
         router.replace('/(tabs)');
         return;
