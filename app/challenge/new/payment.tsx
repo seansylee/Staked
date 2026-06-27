@@ -11,6 +11,7 @@ import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { Button } from '@/components/ui/Button';
 import { posthog } from '@/lib/posthog';
 import { DEMO_MODE } from '@/lib/demo';
+import { useUIStore } from '@/store/useUIStore';
 import { getCharityById } from '@/lib/charities';
 import { confirmChallengeStart, createPaymentIntent } from '@/api/payments';
 import { colors, radius } from '@/constants/theme';
@@ -44,6 +45,7 @@ const sheetAppearance = {
 
 export default function PaymentScreen() {
   const { draft, clearDraft, fetchChallenges, addDemoChallenge } = useChallengeStore();
+  const showToast = useUIStore((s) => s.showToast);
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { isPlatformPaySupported, confirmPlatformPayPayment } = usePlatformPay();
   const [loading, setLoading] = useState(false);
@@ -67,7 +69,7 @@ export default function PaymentScreen() {
   const windowLabel = draft.goal_window === 'daily' ? 'day' : draft.goal_window === 'weekly' ? 'week' : 'month';
 
   const finalizeChallenge = async (paymentIntentId: string) => {
-    const challengeId = await confirmChallengeStart(paymentIntentId, draft);
+    await confirmChallengeStart(paymentIntentId, draft);
     posthog.capture('challenge_created', {
       stake_cents: draft.stake_amount_cents,
       duration_days: draft.duration_days,
@@ -75,9 +77,10 @@ export default function PaymentScreen() {
       target_count: draft.target_count,
     });
     await fetchChallenges();
+    const dollars = Math.round(draft.stake_amount_cents / 100);
+    showToast(`🔥 ${draft.name} is live! $${dollars} is on the line — make it count.`);
     clearDraft();
     router.replace('/(tabs)');
-    router.push(`/challenge/${challengeId}`);
   };
 
   const handleWalletPay = async () => {
@@ -120,7 +123,7 @@ export default function PaymentScreen() {
     setLoading(true);
     try {
       if (DEMO_MODE) {
-        const challengeId = addDemoChallenge(draft);
+        addDemoChallenge(draft);
         posthog.capture('challenge_created', {
           stake_cents: draft.stake_amount_cents,
           duration_days: draft.duration_days,
@@ -128,9 +131,10 @@ export default function PaymentScreen() {
           target_count: draft.target_count,
           demo: true,
         });
+        const dollars = Math.round(draft.stake_amount_cents / 100);
+        showToast(`🔥 ${draft.name} is live! $${dollars} is on the line — make it count.`);
         clearDraft();
         router.replace('/(tabs)');
-        router.push(`/challenge/${challengeId}`);
         return;
       }
 
