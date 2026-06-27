@@ -58,7 +58,7 @@ export default function ChallengeDetailsScreen() {
       target_count: data.target_count,
       goal_window: data.goal_window,
     });
-    router.push('/challenge/new/charity');
+    router.replace('/challenge/new/charity');
   };
 
   return (

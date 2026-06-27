@@ -20,7 +20,7 @@ export default function CharityScreen() {
   const onNext = () => {
     if (!selected) return;
     setDraft({ charity_id: selected });
-    router.push('/challenge/new/payment');
+    router.replace('/challenge/new/payment');
   };
 
   return (
