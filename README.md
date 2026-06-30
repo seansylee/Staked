@@ -1,5 +1,7 @@
 # Staked
 
+<img src="assets/logo.svg" alt="Staked" width="360"/>
+
 A financial commitment app for iOS. Put real money on the line to follow through on your goals.
 
 ## What It Does

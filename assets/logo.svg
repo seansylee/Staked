@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160" width="400" height="160">
+  <!-- Background -->
+  <rect width="400" height="160" rx="16" fill="#0E1019"/>
+
+  <!-- Coin / stake icon -->
+  <circle cx="60" cy="80" r="36" fill="none" stroke="#F7F9E5" stroke-width="3"/>
+  <circle cx="60" cy="80" r="28" fill="none" stroke="#F7F9E5" stroke-width="1" opacity="0.3"/>
+
+  <!-- Dollar sign inside coin -->
+  <text x="60" y="88" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="900"
+        font-size="32" fill="#F7F9E5" text-anchor="middle">$</text>
+
+  <!-- Tick / checkmark arc accent -->
+  <path d="M 42 80 L 54 92 L 82 64" stroke="#22C55E" stroke-width="3.5"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Wordmark: STAKED -->
+  <text x="114" y="72" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="900"
+        font-size="48" fill="#F7F9E5" letter-spacing="-1">STAKED</text>
+
+  <!-- Tagline -->
+  <text x="116" y="98" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="400"
+        font-size="13" fill="#9B9D85" letter-spacing="2.5">COMMIT. FOR REAL.</text>
+</svg>
