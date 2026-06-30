@@ -7,20 +7,6 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
 
 type WindowType = 'daily' | 'weekly' | 'monthly';
 
-function getWindowKey(date: Date, window: WindowType): string {
-  if (window === 'daily') return date.toISOString().slice(0, 10);
-  if (window === 'weekly') {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
-    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-  }
-  const m = date.getMonth() + 1;
-  return `${date.getFullYear()}-${String(m).padStart(2, '0')}`;
-}
-
 function isoWeekMonday(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay() || 7;

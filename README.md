@@ -35,7 +35,7 @@ This is a manual check-in MVP — no AI verification, no social layer. Just a fi
 app/                    Screens (Expo Router)
   (auth)/               Welcome, sign-up, sign-in
   (tabs)/               Dashboard, History, Settings
-  challenge/new/        4-step creation: details → goals → charity → payment
+  challenge/new/        3-step creation: details → charity → payment
   challenge/[id]/       Check-ins and completion summary
 
 src/
@@ -85,14 +85,14 @@ forfeited = min(missed_day_equivalents × daily_protection_value, stake)
 refund = stake - forfeited
 ```
 
-With multiple goals, each goal contributes proportionally — missing one of two goals forfeits half the day's value.
+Each challenge has a single goal — `goal_window` (daily/weekly/monthly) and `target_count` live directly on the `challenges` table.
 
 ## Stripe Payment Flow
 
 1. App calls `create-payment-intent` Edge Function → receives `client_secret`
 2. Stripe PaymentSheet presented natively (supports Apple Pay / Google Pay)
 3. On success, app calls `confirm-challenge-start` with `payment_intent_id`
-4. Edge Function verifies payment with Stripe, writes challenge + goals to DB
+4. Edge Function verifies payment with Stripe, writes challenge to DB
 5. On completion, `complete-challenge` runs protection calc server-side and issues refund
 6. `refund.updated` webhook reconciles final refund status
 
