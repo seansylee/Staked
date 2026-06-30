@@ -4,7 +4,7 @@
 
 ## What This App Does
 
-Staked is a financial commitment app. Users stake real money ($50–$2,500) when creating a challenge. They define goals (e.g. "Gym 3x/week"). Each day has a protection value (`stake / duration_days`). Completed goals protect funds; missed goals forfeit that day's value. At the end, protected funds are returned via Stripe refund.
+Staked is a financial commitment app. Users stake real money ($50–$2,500) when creating a challenge. They define a single goal (e.g. "Gym 3x/week"). Each day has a protection value (`stake / duration_days`). Completing the goal protects funds; missing it forfeits that day's value. At the end, protected funds are returned via Stripe refund.
 
 This is an MVP to validate whether users will stake real money to improve follow-through. No social features, no AI, no automatic verification — manual check-ins only.
 
@@ -12,11 +12,11 @@ This is an MVP to validate whether users will stake real money to improve follow
 
 ## Current Status
 
-**Backend is live and connected. UI revamp complete (commit `cd546e4`).**
+**Backend is live and connected. Single-goal model shipped (commit `e99ed29`).**
 
 - ✅ Supabase project live: `https://xctocyxiwnjdltxqlqyl.supabase.co`
-- ✅ Database migration run (`supabase/migrations/001_initial_schema.sql`)
-- ✅ All 3 Edge Functions deployed to Supabase
+- ✅ Database migrations run (001–004; **004 merges `goals` table into `challenges`** — must be applied to live DB if not already)
+- ✅ All 4 Edge Functions deployed to Supabase (includes `handle-stripe-webhook`)
 - ✅ Stripe secret key set as Supabase secret (`STRIPE_SECRET_KEY`)
 - ✅ `.env` filled with real keys, `EXPO_PUBLIC_DEMO_MODE=false`
 - ✅ App running locally (`npx expo start --ios`, requires `nvm use 20`)
@@ -53,7 +53,7 @@ app/                    Expo Router screens
   (auth)/               Welcome, sign-up, sign-in
   (tabs)/               Dashboard, History, Settings (bottom tab navigator)
   challenge/
-    new/                4-step creation: details → goals → charity → payment
+    new/                3-step creation: details → charity → payment
     [id]/               Challenge detail (check-ins) + completion summary
 
 src/
@@ -67,7 +67,7 @@ src/
     posthog.ts          PostHog client
   store/
     useAuthStore.ts     Session, user, profile — initialized in root layout
-    useChallengeStore.ts Challenges, goals, check-ins, draft for creation flow
+    useChallengeStore.ts Challenges, check-ins, draft for creation flow
     useUIStore.ts       Toast state
   hooks/
     useCheckIn.ts       Optimistic +1 check-in with rollback on error
@@ -82,11 +82,12 @@ src/
     challenge/          ChallengeCard, StakeSummaryPanel, GoalRow
 
 supabase/
-  migrations/001_initial_schema.sql   All tables, RLS policies, auto-profile trigger
+  migrations/           001–004 (004 merges goals table into challenges)
   functions/
     create-payment-intent/    Returns Stripe client_secret for PaymentSheet
-    confirm-challenge-start/  Verifies payment with Stripe, then creates challenge + goals in DB
+    confirm-challenge-start/  Verifies payment with Stripe, then creates challenge in DB
     complete-challenge/       Server-side protection calc, issues Stripe refund, marks complete
+    handle-stripe-webhook/    Reconciles async refund.updated events from Stripe
 ```
 
 ---
@@ -116,22 +117,18 @@ Dark navy, warm cream text. Theme is in `src/constants/theme.ts`.
 ```
 Daily Protection Value = stake_amount / duration_days
 
-For each goal:
   - Count elapsed complete periods (daily/weekly/monthly)
   - Current in-flight period is NOT counted as missed
   - missedPeriods = elapsedPeriods - completedPeriods
   - missedDayEquivalents = missedPeriods × daysPerPeriod(goal_window)
 
-With multiple goals, each contributes missedDayEquivalents / goals.length
-(missing one of two goals forfeits only half the stake)
-
-forfeitedCents = min(totalMissedDayEquivalents × dpv, stake)
+forfeitedCents = min(missedDayEquivalents × dpv, stake)
 protectedCents = stake - forfeitedCents
 ```
 
 `window_key` is stamped on every check-in at write time (e.g. `"2024-W23"` for weekly goals). This makes counting completions an O(1) indexed DB lookup.
 
-**Important:** The goals table column is named `goal_window` (not `window` — reserved word in PostgreSQL).
+**Important:** `goal_window` lives directly on the `challenges` table (not a separate `goals` table — that was merged in migration 004).
 
 Run tests: `npm test` (6 unit tests in `src/__tests__/protection.test.ts`)
 
@@ -140,9 +137,8 @@ Run tests: `npm test` (6 unit tests in `src/__tests__/protection.test.ts`)
 ## Supabase Schema (tables)
 
 - `profiles` — extends auth.users, stores stripe_customer_id, push_token
-- `challenges` — stake_amount (cents), duration_days, start_date, end_date, status
-- `goals` — target_count, `goal_window` (daily/weekly/monthly)
-- `check_ins` — goal_id, challenge_id, window_key (stamped at write)
+- `challenges` — stake_amount (cents), duration_days, start_date, end_date, status, target_count, goal_window, charity_id
+- `check_ins` — challenge_id, window_key (stamped at write); no `goal_id` (goals table removed in 004)
 - `payments` — audit log for deposits and refunds
 
 All tables have RLS (users see only their own data). Auto-trigger creates `profiles` row on signup.
@@ -154,7 +150,7 @@ All tables have RLS (users see only their own data). Auto-trigger creates `profi
 1. App calls `create-payment-intent` Edge Function → gets `client_secret`
 2. App presents Stripe PaymentSheet (native UI)
 3. On success, app calls `confirm-challenge-start` Edge Function with payment_intent_id
-4. Edge Function verifies status=succeeded with Stripe, then writes challenge+goals to DB
+4. Edge Function verifies status=succeeded with Stripe, then writes challenge to DB
 5. On completion, `complete-challenge` Edge Function runs protection calc server-side, issues refund, and records payment as `pending`
 6. Stripe fires `refund.updated` webhook → `handle-stripe-webhook` Edge Function reconciles payment and challenge `refund_status` to `succeeded` or `failed`
 
