@@ -6,23 +6,26 @@ import { GoalRow } from '@/components/challenge/GoalRow';
 import { StakeSummaryPanel } from '@/components/challenge/StakeSummaryPanel';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { completeChallenge } from '@/api/payments';
+import { completeChallenge, quitChallenge } from '@/api/payments';
 import { posthog } from '@/lib/posthog';
 import { useCheckIn } from '@/hooks/useCheckIn';
 import { colors, radius } from '@/constants/theme';
+import { DEMO_MODE } from '@/lib/demo';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { computeGoalProgress, computeProtection, daysRemainingForChallenge, isChallengeComplete } from '@/utils/protection';
-import { formatDateShort, pluralize } from '@/utils/formatting';
+import { formatCurrency, formatDateShort, pluralize } from '@/utils/formatting';
 
 export default function ChallengeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [completing, setCompleting] = useState(false);
+  const [quitting, setQuitting] = useState(false);
 
   const challenges = useChallengeStore((s) => s.challenges);
   const checkInsMap = useChallengeStore((s) => s.checkInsMap);
   const subscribeToCheckIns = useChallengeStore((s) => s.subscribeToCheckIns);
   const unsubscribeAll = useChallengeStore((s) => s.unsubscribeAll);
   const setChallengeCompleted = useChallengeStore((s) => s.setChallengeCompleted);
+  const setChallengeQuit = useChallengeStore((s) => s.setChallengeQuit);
 
   const challenge = challenges.find((c) => c.id === id);
   const checkIns = checkInsMap[id] ?? [];
@@ -68,6 +71,60 @@ export default function ChallengeDetailScreen() {
               Alert.alert('Error', message);
             } finally {
               setCompleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleQuit = () => {
+    const protectedCents = summary?.protectedFunds ?? 0;
+    const penaltyCents = Math.round(protectedCents * 0.20);
+    const refundCents = protectedCents - penaltyCents;
+    const protectedStr = formatCurrency(protectedCents);
+    const refundStr = formatCurrency(refundCents);
+    const penaltyStr = formatCurrency(penaltyCents);
+
+    Alert.alert(
+      'Quit Challenge?',
+      `You currently have ${protectedStr} protected.\n\nQuitting early applies a 20% penalty (${penaltyStr}), so you'll receive ${refundStr} back.\n\nThis cannot be undone.`,
+      [
+        { text: 'Keep Going', style: 'cancel' },
+        {
+          text: 'Quit',
+          style: 'destructive',
+          onPress: async () => {
+            setQuitting(true);
+            try {
+              if (DEMO_MODE) {
+                const now = new Date().toISOString();
+                const demoUpdated = {
+                  ...challenge,
+                  status: 'quit' as const,
+                  protected_amount_cents: refundCents,
+                  forfeited_amount_cents: (challenge.stake_amount - protectedCents) + penaltyCents,
+                  quit_penalty_cents: penaltyCents,
+                  stripe_refund_id: 'demo-refund',
+                  updated_at: now,
+                };
+                setChallengeQuit(demoUpdated);
+                router.replace(`/challenge/${id}/quit-summary`);
+                return;
+              }
+              const result = await quitChallenge(id);
+              setChallengeQuit(result.challenge);
+              posthog.capture('challenge_quit', {
+                challenge_id: id,
+                refund_cents: result.refundCents,
+                penalty_cents: result.penaltyCents,
+              });
+              router.replace(`/challenge/${id}/quit-summary`);
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : 'Failed to quit challenge';
+              Alert.alert('Error', message);
+            } finally {
+              setQuitting(false);
             }
           },
         },
@@ -137,6 +194,12 @@ export default function ChallengeDetailScreen() {
             style={styles.completeBtn}
           />
         )}
+
+        {!canComplete && (
+          <TouchableOpacity onPress={handleQuit} disabled={quitting} style={styles.quitBtn}>
+            <Text style={styles.quitText}>{quitting ? 'Quitting…' : 'Quit Challenge'}</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -190,6 +253,8 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   completeBtn: { marginTop: 16 },
+  quitBtn: { marginTop: 24, alignItems: 'center', paddingVertical: 8 },
+  quitText: { fontSize: 13, color: colors.textMuted, textDecorationLine: 'underline' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   notFound: { fontSize: 15, color: colors.textSecondary },
 });
