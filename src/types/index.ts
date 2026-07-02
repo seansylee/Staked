@@ -1,6 +1,6 @@
 export type Window = 'daily' | 'weekly' | 'monthly';
 
-export type ChallengeStatus = 'active' | 'completed' | 'cancelled';
+export type ChallengeStatus = 'active' | 'completed' | 'cancelled' | 'quit';
 
 export interface Profile {
   id: string;
@@ -28,6 +28,7 @@ export interface Challenge {
   protected_amount_cents: number | null;
   forfeited_amount_cents: number | null;
   charity_id: string | null;
+  quit_penalty_cents: number | null;
   created_at: string;
 }
 
@@ -71,5 +72,12 @@ export interface ProtectionSummary {
 export interface CompletionSummary {
   challenge: Challenge;
   protectedCents: number;
+  forfeitedCents: number;
+}
+
+export interface QuitSummary {
+  challenge: Challenge;
+  refundCents: number;
+  penaltyCents: number;
   forfeitedCents: number;
 }

@@ -20,6 +20,7 @@ interface ChallengeState {
   addCheckIn: (challengeId: string) => Promise<void>;
   addDemoChallenge: (draft: ChallengeDraft) => string;
   setChallengeCompleted: (challenge: Challenge) => void;
+  setChallengeQuit: (challenge: Challenge) => void;
 }
 
 const DEFAULT_DRAFT: ChallengeDraft = {
@@ -219,6 +220,7 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
       protected_amount_cents: null,
       forfeited_amount_cents: null,
       charity_id: draft.charity_id,
+      quit_penalty_cents: null,
       created_at: now.toISOString(),
     };
 
@@ -231,6 +233,14 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
   },
 
   setChallengeCompleted: (updatedChallenge) => {
+    set((state) => ({
+      challenges: state.challenges.map((c) =>
+        c.id === updatedChallenge.id ? updatedChallenge : c
+      ),
+    }));
+  },
+
+  setChallengeQuit: (updatedChallenge) => {
     set((state) => ({
       challenges: state.challenges.map((c) =>
         c.id === updatedChallenge.id ? updatedChallenge : c

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { ChallengeDraft, CompletionSummary } from '@/types';
+import { ChallengeDraft, CompletionSummary, QuitSummary } from '@/types';
 
 export async function createPaymentIntent(amountCents: number): Promise<string> {
   const { data, error } = await supabase.functions.invoke('create-payment-intent', {
@@ -26,4 +26,12 @@ export async function completeChallenge(challengeId: string): Promise<Completion
   });
   if (error) throw error;
   return data as CompletionSummary;
+}
+
+export async function quitChallenge(challengeId: string): Promise<QuitSummary> {
+  const { data, error } = await supabase.functions.invoke('quit-challenge', {
+    body: { challenge_id: challengeId },
+  });
+  if (error) throw error;
+  return data as QuitSummary;
 }
