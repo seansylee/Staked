@@ -1,6 +1,6 @@
 import Stripe from 'https://esm.sh/stripe@14';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { computeProtectionCents } from '../_shared/protection.ts';
+import { challengeEndExclusive, computeProtectionCents } from '../_shared/protection.ts';
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-04-10',
@@ -36,6 +36,12 @@ Deno.serve(async (req) => {
 
   if (challengeError || !challenge) {
     return new Response('Challenge not found', { status: 404 });
+  }
+
+  // Completing before the end would return 100% of protected funds and bypass
+  // the 20% quit penalty — early exits must go through quit-challenge.
+  if (Date.now() < challengeEndExclusive(challenge.end_date)) {
+    return new Response('Challenge has not ended yet', { status: 400 });
   }
 
   const { data: checkIns } = await supabase
