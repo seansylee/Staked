@@ -55,32 +55,62 @@ Deno.serve(async (req) => {
     new Date()
   );
 
-  const refund = await stripe.refunds.create({
-    payment_intent: challenge.stripe_payment_intent_id,
-    amount: protectedCents,
-  });
+  // Stripe rejects zero-amount refunds — with nothing protected there is no
+  // refund to issue, so settle the challenge directly.
+  let refundId: string | null = null;
+  if (protectedCents > 0) {
+    // Shared settle-* key with quit-challenge: a retry returns the same refund
+    // instead of creating a second one, and a concurrent quit (different
+    // amount, same key) is rejected by Stripe outright.
+    const refund = await stripe.refunds.create(
+      { payment_intent: challenge.stripe_payment_intent_id, amount: protectedCents },
+      { idempotencyKey: `settle-${challenge_id}` }
+    );
+    refundId = refund.id;
+  }
 
-  const { data: updatedChallenge } = await supabase
+  const { data: updatedChallenge, error: updateError } = await supabase
     .from('challenges')
     .update({
       status: 'completed',
       protected_amount_cents: protectedCents,
       forfeited_amount_cents: forfeitedCents,
-      stripe_refund_id: refund.id,
-      refund_status: 'pending',
+      stripe_refund_id: refundId,
+      refund_status: refundId ? 'pending' : 'succeeded',
     })
     .eq('id', challenge_id)
+    .eq('status', 'active')
     .select()
     .single();
 
-  await supabase.from('payments').insert({
-    challenge_id,
-    user_id: user.id,
-    type: 'refund',
-    amount_cents: protectedCents,
-    stripe_id: refund.id,
-    status: 'pending',
-  });
+  if (updateError || !updatedChallenge) {
+    const { data: current } = await supabase
+      .from('challenges')
+      .select('status')
+      .eq('id', challenge_id)
+      .single();
+    if (current && current.status !== 'active') {
+      return new Response('Challenge already settled', { status: 409 });
+    }
+    console.error('Settlement write failed after refund', challenge_id, refundId, updateError);
+    return new Response('Refund issued but challenge update failed — retry to reconcile', {
+      status: 500,
+    });
+  }
+
+  if (refundId) {
+    const { error: paymentError } = await supabase.from('payments').insert({
+      challenge_id,
+      user_id: user.id,
+      type: 'refund',
+      amount_cents: protectedCents,
+      stripe_id: refundId,
+      status: 'pending',
+    });
+    if (paymentError) {
+      console.error('Payments audit insert failed', challenge_id, refundId, paymentError);
+    }
+  }
 
   return new Response(
     JSON.stringify({ challenge: updatedChallenge, protectedCents, forfeitedCents }),
