@@ -1,78 +1,10 @@
 import Stripe from 'https://esm.sh/stripe@14';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { computeProtectionCents } from '../_shared/protection.ts';
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-04-10',
 });
-
-type WindowType = 'daily' | 'weekly' | 'monthly';
-
-function isoWeekMonday(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay() || 7;
-  d.setDate(d.getDate() - day + 1);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function monthStart(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
-}
-
-function countElapsedPeriods(startDate: string, window: WindowType, ref: Date): number {
-  const start = new Date(startDate + 'T00:00:00');
-  if (window === 'daily') {
-    return Math.max(0, Math.floor((ref.getTime() - start.getTime()) / 86_400_000));
-  }
-  if (window === 'weekly') {
-    const sm = isoWeekMonday(start);
-    const rm = isoWeekMonday(ref);
-    return Math.max(0, Math.floor((rm.getTime() - sm.getTime()) / (7 * 86_400_000)));
-  }
-  const sm = monthStart(start);
-  const rm = monthStart(ref);
-  return Math.max(0, (rm.getFullYear() - sm.getFullYear()) * 12 + (rm.getMonth() - sm.getMonth()));
-}
-
-function daysPerPeriod(window: WindowType): number {
-  return window === 'daily' ? 1 : window === 'weekly' ? 7 : 30;
-}
-
-interface Challenge {
-  stake_amount: number;
-  duration_days: number;
-  start_date: string;
-  target_count: number;
-  goal_window: WindowType;
-}
-
-interface CheckIn { window_key: string; }
-
-function computeProtectionCents(
-  challenge: Challenge,
-  checkIns: CheckIn[],
-  ref: Date = new Date()
-): { protectedCents: number; forfeitedCents: number } {
-  const { stake_amount, duration_days, start_date, target_count, goal_window } = challenge;
-  const dpv = stake_amount / duration_days;
-
-  const countByKey: Record<string, number> = {};
-  for (const ci of checkIns) {
-    countByKey[ci.window_key] = (countByKey[ci.window_key] ?? 0) + 1;
-  }
-
-  const elapsed = countElapsedPeriods(start_date, goal_window, ref);
-  let completedPeriods = 0;
-  for (const count of Object.values(countByKey)) {
-    if (count >= target_count) completedPeriods++;
-  }
-  completedPeriods = Math.min(completedPeriods, elapsed);
-  const missedPeriods = elapsed - completedPeriods;
-  const missedDays = Math.min(missedPeriods * daysPerPeriod(goal_window), duration_days);
-
-  const forfeitedCents = Math.min(Math.round(missedDays * dpv), stake_amount);
-  return { protectedCents: stake_amount - forfeitedCents, forfeitedCents };
-}
 
 const QUIT_PENALTY_RATE = 0.20;
 

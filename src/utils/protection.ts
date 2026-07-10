@@ -1,6 +1,6 @@
 import { Challenge, CheckIn, ProtectionSummary, Window } from '@/types';
 import {
-  countElapsedPeriods,
+  challengeEndExclusive,
   daysRemaining,
   elapsedDays,
   getElapsedWindowKeys,
@@ -104,26 +104,32 @@ export function computeProtection(
   checkIns: CheckIn[],
   referenceDate: Date = new Date()
 ): ProtectionSummary {
-  const { goal_window, target_count, stake_amount, duration_days, start_date } = challenge;
+  const { goal_window, target_count, stake_amount, duration_days, start_date, end_date } = challenge;
   const dpv = stake_amount / duration_days;
+
+  // Periods after the challenge end never count as missed — the payout must
+  // not depend on how long after end_date the user settles.
+  const endExclusive = challengeEndExclusive(end_date);
+  const ref = referenceDate.getTime() > endExclusive ? new Date(endExclusive) : referenceDate;
 
   const countByKey: Record<string, number> = {};
   for (const ci of checkIns) {
     countByKey[ci.window_key] = (countByKey[ci.window_key] ?? 0) + 1;
   }
 
-  const elapsed = countElapsedPeriods(start_date, goal_window, referenceDate);
+  // Only closed periods count — a completed in-flight period must not mask a
+  // missed past one.
+  const elapsedKeys = getElapsedWindowKeys(start_date, goal_window, ref);
   let completedPeriods = 0;
-  for (const count of Object.values(countByKey)) {
-    if (count >= target_count) completedPeriods++;
+  for (const key of elapsedKeys) {
+    if ((countByKey[key] ?? 0) >= target_count) completedPeriods++;
   }
-  completedPeriods = Math.min(completedPeriods, elapsed);
-  const missedPeriods = elapsed - completedPeriods;
+  const missedPeriods = elapsedKeys.length - completedPeriods;
   const missedDays = Math.min(missedPeriods * daysPerPeriod(goal_window), duration_days);
 
   const forfeitedCents = Math.min(Math.round(missedDays * dpv), stake_amount);
   const protectedCents = stake_amount - forfeitedCents;
-  const elapsedD = elapsedDays(start_date, referenceDate);
+  const elapsedD = elapsedDays(start_date, ref);
   const completionPercent = Math.min(Math.round((elapsedD / duration_days) * 100), 100);
 
   return {
@@ -149,9 +155,7 @@ export function computeGoalProgress(
 }
 
 export function isChallengeComplete(challenge: Challenge): boolean {
-  const today = new Date();
-  const end = new Date(challenge.end_date + 'T23:59:59');
-  return today > end && challenge.status === 'active';
+  return Date.now() >= challengeEndExclusive(challenge.end_date) && challenge.status === 'active';
 }
 
 export function daysRemainingForChallenge(challenge: Challenge): number {

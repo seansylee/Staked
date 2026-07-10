@@ -18,6 +18,7 @@ const makeChallenge = (override: Partial<Challenge> = {}): Challenge => ({
   protected_amount_cents: null,
   forfeited_amount_cents: null,
   charity_id: null,
+  quit_penalty_cents: null,
   created_at: '2024-01-01T00:00:00Z',
   ...override,
 });
@@ -117,5 +118,59 @@ describe('computeProtection', () => {
     const checkIns: CheckIn[] = [makeCheckIn('2024-W01', 'ci1')];
     const summary = computeProtection(challenge, checkIns, ref);
     expect(summary.protectedFunds + summary.fundsAtRisk).toBe(challenge.stake_amount);
+  });
+
+  it('counts elapsed periods in UTC regardless of runtime timezone', () => {
+    // 30 min past UTC midnight on day 3 → exactly 2 closed daily periods.
+    // Before the UTC fix this drifted ±1 depending on the machine timezone,
+    // making the client dialog disagree with the Edge Function refund.
+    const challenge = makeChallenge({
+      stake_amount: 30000,
+      duration_days: 30,
+      start_date: '2024-01-01',
+      end_date: '2024-01-30',
+      target_count: 1,
+      goal_window: 'daily',
+    });
+    const justPastUtcMidnight = new Date('2024-01-03T00:30:00Z');
+    const summary = computeProtection(challenge, [], justPastUtcMidnight);
+    // 2 missed days × $10/day
+    expect(summary.fundsAtRisk).toBe(2000);
+    expect(summary.protectedFunds).toBe(28000);
+  });
+
+  it('does not count periods after end_date as missed when settling late', () => {
+    const challenge = makeChallenge({
+      duration_days: 7,
+      start_date: '2024-01-01',
+      end_date: '2024-01-07',
+      target_count: 1,
+      goal_window: 'daily',
+    });
+    const checkIns: CheckIn[] = Array.from({ length: 7 }, (_, i) =>
+      makeCheckIn(`2024-01-0${i + 1}`, `ci${i + 1}`)
+    );
+    // Settling 5 days after the challenge ended — all 7 days were completed
+    const lateRef = new Date('2024-01-12T12:00:00Z');
+    const summary = computeProtection(challenge, checkIns, lateRef);
+    expect(summary.fundsAtRisk).toBe(0);
+    expect(summary.protectedFunds).toBe(30000);
+  });
+
+  it('does not let a completed in-flight period mask a missed past period', () => {
+    const challenge = makeChallenge({
+      stake_amount: 30000,
+      duration_days: 30,
+      start_date: '2024-01-01',
+      end_date: '2024-01-30',
+      target_count: 1,
+      goal_window: 'daily',
+    });
+    // Missed Jan 1, checked in during the current (in-flight) Jan 2 window
+    const checkIns: CheckIn[] = [makeCheckIn('2024-01-02', 'ci1')];
+    const summary = computeProtection(challenge, checkIns, new Date('2024-01-02T12:00:00Z'));
+    // 1 missed day × $10/day
+    expect(summary.fundsAtRisk).toBe(1000);
+    expect(summary.protectedFunds).toBe(29000);
   });
 });
