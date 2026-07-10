@@ -15,7 +15,7 @@ This is an MVP to validate whether users will stake real money to improve follow
 **Backend is live and connected. Single-goal model shipped (commit `e99ed29`). Quit-challenge feature shipped (commit `4d082d2`).**
 
 - ✅ Supabase project live: `https://xctocyxiwnjdltxqlqyl.supabase.co`
-- ✅ Database migrations 001–005 all applied to the live DB **and recorded in the remote migration history** (verified 2026-07-09 — `npx supabase migration list --linked` shows local and remote in sync)
+- ✅ Database migrations 001–006 all applied to the live DB **and recorded in the remote migration history** (verified 2026-07-10 — `npx supabase migration list --linked` shows local and remote in sync)
 - ✅ All 5 Edge Functions deployed to Supabase (includes `handle-stripe-webhook` and `quit-challenge`)
 - ✅ Stripe secret key set as Supabase secret (`STRIPE_SECRET_KEY`)
 - ✅ `.env` filled with real keys, `EXPO_PUBLIC_DEMO_MODE=false`
@@ -33,6 +33,15 @@ This is an MVP to validate whether users will stake real money to improve follow
 **Fixed 2026-07-09 — more live-infra drift (third incident of repo-says-X / prod-says-Y):**
 1. Migration `002_add_charity_id.sql` was never applied to the live DB (`challenges.charity_id` didn't exist), and the deployed `confirm-challenge-start` was a stale build from before charity persistence — the two bugs masked each other, so creation "worked" but silently dropped the user's charity choice. Applied 002 and redeployed the function; both verified live.
 2. The remote migration history table was completely empty (schema had been applied by hand). Repaired with `npx supabase migration repair --status applied ...` — `npx supabase migration list --linked` now shows 001–005 in sync, and `npx supabase db push` works normally for future migrations. **After any migration or Edge Function change, verify both: `migration list --linked` matches `supabase/migrations/`, and the deployed function build isn't stale.**
+
+**Hardened 2026-07-10 — money-path edge cases (all live-tested, including a real concurrent double-quit):**
+1. **Zero-refund settle:** a fully-missed challenge (protected = 0) used to crash on Stripe's zero-amount refund rejection and stay `active` forever. Both settlement functions now skip Stripe and set `refund_status: 'succeeded'` directly.
+2. **Double-settlement:** settlement was SELECT → refund → UPDATE with no locking. Now both functions share a Stripe idempotency key (`settle-{challenge_id}`) and the UPDATE is conditional on `status = 'active'` (loser gets 409). Verified with two truly concurrent quits: one 200, one 409, exactly one Stripe refund.
+3. **Silent partial failure:** DB errors after the refund fired were ignored (200 with `challenge: null`). Now checked; returns 500 with the refund id logged. A retry heals it via the idempotency key.
+4. **Payment reuse / forged drafts:** migration 006 adds a unique constraint on `challenges.stripe_payment_intent_id` (replay → 409), and `confirm-challenge-start` validates the draft server-side (stake $50–2,500 and must equal `paymentIntent.amount − fee`, duration 1–365, target_count ≥ 1, window enum).
+5. **Webhook retry:** unknown refund ids now return 404 so Stripe retries (heals the event-beats-insert race); previously a 200 meant `refund_status` stuck `pending` forever.
+
+**Known open UX issues (deliberate, not yet fixed):** the financial day boundary is UTC midnight (5pm PT) — evening check-ins land in the next window and the 7pm-local reminder fires after the boundary; no claim CTA/notification when a challenge ends (Stripe refunds become impossible ~180 days after charge); `refund_status: 'failed'` isn't surfaced in the UI; `scheduleDailyReminder` is never called (dead code); check-in `window_key` is client-supplied so past windows can be backfilled via the API.
 
 **Next step:** Set up PostHog (real API key in `.env`), then TestFlight build for real device testing (`eas build --platform ios --profile preview` — needs $99 Apple Developer account).
 
@@ -92,7 +101,7 @@ src/
     challenge/          ChallengeCard, StakeSummaryPanel, GoalRow
 
 supabase/
-  migrations/           001–005 (004 merges goals table into challenges, 005 adds quit support)
+  migrations/           001–006 (004 merges goals into challenges, 005 adds quit, 006 unique payment_intent)
   functions/
     _shared/protection.ts     Server-side protection calc — mirrors src/utils/dates.ts + protection.ts, keep in sync
     create-payment-intent/    Returns Stripe client_secret for PaymentSheet
@@ -156,7 +165,7 @@ Run tests: `npm test` (9 unit tests in `src/__tests__/protection.test.ts`)
 ## Supabase Schema (tables)
 
 - `profiles` — extends auth.users, stores stripe_customer_id, push_token
-- `challenges` — stake_amount (cents), duration_days, start_date, end_date, status (`active`/`completed`/`cancelled`/`quit`), target_count, goal_window, charity_id, refund_status (`pending`/`succeeded`/`failed`, added in 003), quit_penalty_cents (added in 005)
+- `challenges` — stake_amount (cents), duration_days, start_date, end_date, status (`active`/`completed`/`cancelled`/`quit`), target_count, goal_window, charity_id, refund_status (`pending`/`succeeded`/`failed`, added in 003), quit_penalty_cents (added in 005), stripe_payment_intent_id UNIQUE (006 — one challenge per payment)
 - `check_ins` — challenge_id, window_key (stamped at write); no `goal_id` (goals table removed in 004)
 - `payments` — audit log for deposits and refunds
 
