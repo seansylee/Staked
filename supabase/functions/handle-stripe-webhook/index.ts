@@ -33,17 +33,22 @@ Deno.serve(async (req) => {
 
   if (event.type === 'refund.updated') {
     const refund = event.data.object as Stripe.Refund;
-    await handleRefundUpdated(refund);
+    const handled = await handleRefundUpdated(refund);
+    if (!handled) {
+      // Non-2xx makes Stripe retry (with backoff, for days) — heals the race
+      // where this event arrives before the settlement function has committed
+      // the payments row.
+      return new Response('Refund not recognized yet', { status: 404 });
+    }
   }
 
-  // Return 200 quickly — Stripe retries on non-2xx
   return new Response(JSON.stringify({ received: true }), {
     headers: { 'Content-Type': 'application/json' },
   });
 });
 
-async function handleRefundUpdated(refund: Stripe.Refund) {
-  if (refund.status !== 'succeeded' && refund.status !== 'failed') return;
+async function handleRefundUpdated(refund: Stripe.Refund): Promise<boolean> {
+  if (refund.status !== 'succeeded' && refund.status !== 'failed') return true;
 
   // Update the payments audit row
   const { data: payment, error: paymentError } = await supabase
@@ -55,9 +60,8 @@ async function handleRefundUpdated(refund: Stripe.Refund) {
     .single();
 
   if (paymentError || !payment) {
-    // Not a refund we issued — ignore
     console.error('Payment row not found for refund', refund.id, paymentError);
-    return;
+    return false;
   }
 
   // Mirror refund_status onto the challenge for easy querying
@@ -76,4 +80,5 @@ async function handleRefundUpdated(refund: Stripe.Refund) {
       refund.failure_reason
     );
   }
+  return true;
 }
