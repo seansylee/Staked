@@ -15,23 +15,26 @@ This is an MVP to validate whether users will stake real money to improve follow
 **Backend is live and connected. Single-goal model shipped (commit `e99ed29`). Quit-challenge feature shipped (commit `4d082d2`).**
 
 - ✅ Supabase project live: `https://xctocyxiwnjdltxqlqyl.supabase.co`
-- ✅ Database migrations 001–005 all applied to the live DB (**005 adds quit support** — `quit_penalty_cents` column + `'quit'` status)
+- ✅ Database migrations 001–005 all applied to the live DB **and recorded in the remote migration history** (verified 2026-07-09 — `npx supabase migration list --linked` shows local and remote in sync)
 - ✅ All 5 Edge Functions deployed to Supabase (includes `handle-stripe-webhook` and `quit-challenge`)
 - ✅ Stripe secret key set as Supabase secret (`STRIPE_SECRET_KEY`)
 - ✅ `.env` filled with real keys, `EXPO_PUBLIC_DEMO_MODE=false`
 - ✅ App running locally (`npx expo start --ios`, requires `nvm use 20`)
 - ✅ UI revamp complete — new theme, font, dashboard streak/nudge system
 - ✅ Quit-challenge flow smoke-tested end-to-end on 2026-07-03 (confirm dialog → Stripe refund → DB update → webhook reconciliation → summary screen)
+- ✅ Complete-challenge flow smoke-tested end-to-end on 2026-07-09 (payment → challenge → check-ins → refund calc → Stripe refund → automatic webhook reconciliation). Quit flow re-verified same session after the calc refactor; charity_id persistence verified.
 
-**Recently fixed (2026-07-03) — two live-infra bugs that had silently broken the entire refund path since deployment:**
-1. Migration `003_add_refund_status.sql` was committed but never actually applied to the live DB, even though 004/005 landed on top of the gap. Every `complete-challenge` / `quit-challenge` refund write was failing after the Stripe refund had already fired, leaving challenges stuck `active` with an untracked Stripe refund. Applied directly to the live DB — **run `npx supabase migration list --linked` and diff against `supabase/migrations/` after any future migration work to make sure this doesn't happen again.**
-2. `handle-stripe-webhook` was deployed with the Supabase default `verify_jwt: true`, so the platform gateway 401'd every call from Stripe (Stripe sends `stripe-signature`, not a Supabase JWT) before the function code ever ran. Redeployed with `--no-verify-jwt`. **Any Edge Function called by something other than the app itself (webhooks, cron, etc.) needs `--no-verify-jwt` — the app-facing functions (`create-payment-intent`, `confirm-challenge-start`, `complete-challenge`, `quit-challenge`) should keep the default `verify_jwt: true`.**
+**Fixed 2026-07-09 — protection-calc bugs (all in one pass, client + server):**
+1. **Timezone discrepancy (was the "known open bug"):** all period-boundary math (day/week/month) is now explicit-UTC on both sides. The Edge Functions share one calc module, `supabase/functions/_shared/protection.ts`, which mirrors `src/utils/dates.ts` + `protection.ts` — keep the two in sync if touching either.
+2. **Late-settlement docking:** periods after `end_date` counted as missed, so pressing Complete two days late forfeited two extra days. Reference date is now capped at end of challenge.
+3. **In-flight masking:** a completed current (not yet closed) window counted toward `completedPeriods`, hiding one missed past period at quit time. Only closed periods count now.
+4. **Penalty bypass:** `complete-challenge` never checked `end_date` — a direct API call on day 1 refunded 100% of protected funds, skipping the 20% quit penalty. Now rejects with 400 until the challenge has ended.
 
-**Known open bug:** the quit-challenge confirmation dialog shows a protection/refund amount computed client-side (`src/utils/protection.ts`) that can disagree with what the server (`supabase/functions/quit-challenge/index.ts`, a separate duplicated calc) actually refunds — observed off by one day's protection value ($83.33/$66.66 promised vs $80/$64 actually refunded). Root cause: both sides parse `start_date + 'T00:00:00'` with no timezone offset, so `countElapsedPeriods` resolves "midnight" in whatever timezone the runtime happens to be in — the device's local zone on the client, UTC on the Deno Edge Function server. Near a day boundary this shifts the elapsed-periods `floor()` by one. Fix by parsing as UTC explicitly (`T00:00:00Z`) on both sides, or by having the client trust the server's number instead of precomputing its own. **A user-facing dollar amount should never differ from what's actually charged — fix before shipping.**
+**Fixed 2026-07-09 — more live-infra drift (third incident of repo-says-X / prod-says-Y):**
+1. Migration `002_add_charity_id.sql` was never applied to the live DB (`challenges.charity_id` didn't exist), and the deployed `confirm-challenge-start` was a stale build from before charity persistence — the two bugs masked each other, so creation "worked" but silently dropped the user's charity choice. Applied 002 and redeployed the function; both verified live.
+2. The remote migration history table was completely empty (schema had been applied by hand). Repaired with `npx supabase migration repair --status applied ...` — `npx supabase migration list --linked` now shows 001–005 in sync, and `npx supabase db push` works normally for future migrations. **After any migration or Edge Function change, verify both: `migration list --linked` matches `supabase/migrations/`, and the deployed function build isn't stale.**
 
-**Next step:** Re-verify `complete-challenge` (normal, non-quit completion + refund) — this was never finished in the original smoke test session and predates both infra fixes above, so it should be re-run fresh. Then fix the protection-calc discrepancy above.
-
-**After that:** TestFlight build for real device testing (`eas build --platform ios --profile preview` — needs $99 Apple Developer account).
+**Next step:** Set up PostHog (real API key in `.env`), then TestFlight build for real device testing (`eas build --platform ios --profile preview` — needs $99 Apple Developer account).
 
 ---
 
@@ -81,7 +84,7 @@ src/
   api/
     payments.ts         Calls Supabase Edge Functions (create-payment-intent, etc.)
   utils/
-    dates.ts            getWindowKey, countElapsedPeriods, elapsedDays, windowEndLabel, daysUntilWindowEnd
+    dates.ts            getWindowKey, getElapsedWindowKeys, challengeEndExclusive, elapsedDays, windowEndLabel, daysUntilWindowEnd
     protection.ts       computeProtection, computeGoalProgress, computeDashboardStatus (core financial logic)
     formatting.ts       formatCurrency, formatDate, pluralize
   components/
@@ -91,6 +94,7 @@ src/
 supabase/
   migrations/           001–005 (004 merges goals table into challenges, 005 adds quit support)
   functions/
+    _shared/protection.ts     Server-side protection calc — mirrors src/utils/dates.ts + protection.ts, keep in sync
     create-payment-intent/    Returns Stripe client_secret for PaymentSheet
     confirm-challenge-start/  Verifies payment with Stripe, then creates challenge in DB
     complete-challenge/       Server-side protection calc, issues Stripe refund, marks complete
@@ -125,9 +129,12 @@ Dark navy, warm cream text. Theme is in `src/constants/theme.ts`.
 ```
 Daily Protection Value = stake_amount / duration_days
 
-  - Count elapsed complete periods (daily/weekly/monthly)
-  - Current in-flight period is NOT counted as missed
-  - missedPeriods = elapsedPeriods - completedPeriods
+  - Enumerate closed (elapsed) periods since start_date — the current
+    in-flight period is excluded entirely (not missed, not completed)
+  - Reference date is capped at end of end_date, so periods after the
+    challenge never count as missed no matter how late the user settles
+  - completedPeriods = closed periods with ≥ target_count check-ins
+  - missedPeriods = closedPeriods - completedPeriods
   - missedDayEquivalents = missedPeriods × daysPerPeriod(goal_window)
 
 forfeitedCents = min(missedDayEquivalents × dpv, stake)
@@ -138,9 +145,11 @@ protectedCents = stake - forfeitedCents
 
 **Important:** `goal_window` lives directly on the `challenges` table (not a separate `goals` table — that was merged in migration 004).
 
-**Caution:** `countElapsedPeriods` parses `start_date + 'T00:00:00'` with no timezone suffix, so "midnight" resolves in whatever local timezone the runtime is in. The client (`src/utils/dates.ts`) and the server duplicate in `supabase/functions/quit-challenge/index.ts` can therefore disagree near a day boundary — see the known bug in Current Status above. Parse as UTC explicitly if touching this logic.
+**All period-boundary math is explicit-UTC** (dates parsed as `T00:00:00Z`, UTC getters throughout) so the client (`src/utils/dates.ts` + `protection.ts`) and the server (`supabase/functions/_shared/protection.ts`, imported by both `complete-challenge` and `quit-challenge`) always produce identical numbers regardless of runtime timezone. If you touch one side, mirror it on the other — the test suite runs green under `TZ=UTC`, `TZ=America/Los_Angeles`, and `TZ=Pacific/Kiritimati`.
 
-Run tests: `npm test` (6 unit tests in `src/__tests__/protection.test.ts`)
+Display-only helpers (`windowEndLabel`, `daysUntilWindowEnd`, the at-risk nudge) intentionally stay in device-local time — "tonight" means the user's tonight; the financial boundary is UTC midnight.
+
+Run tests: `npm test` (9 unit tests in `src/__tests__/protection.test.ts`)
 
 ---
 
@@ -199,7 +208,7 @@ Users can end an active challenge early from the challenge detail screen (`app/c
 5. Same `handle-stripe-webhook` reconciles `refund_status` to `succeeded`/`failed` once Stripe's `refund.updated` event lands
 6. App shows the "Challenge Ended Early" summary screen (original stake, missed check-ins, early-exit penalty, amount returned)
 
-See the client/server protection-calc discrepancy noted in Current Status — the confirmation dialog's numbers can disagree with the actual refund.
+The confirmation dialog's numbers come from the client-side calc, which is an exact UTC mirror of the server's (see Core Financial Logic) — verified to agree as of 2026-07-09.
 
 ---
 
@@ -244,8 +253,8 @@ Run locally: `npx expo start --ios` (requires Node ≥20.13 — run `nvm use 20`
 
 - [x] Smoke test sign-up → create challenge → pay → check-in
 - [x] Smoke test quit-challenge → refund → webhook reconciliation (2026-07-03)
-- [ ] Smoke test normal completion → `complete-challenge` refund → webhook reconciliation (never finished — re-run now that the migration/webhook-auth bugs are fixed)
-- [ ] Fix client/server protection-calc discrepancy in quit-challenge (see Current Status)
+- [x] Smoke test normal completion → `complete-challenge` refund → webhook reconciliation (2026-07-09)
+- [x] Fix client/server protection-calc discrepancy in quit-challenge (2026-07-09 — UTC everywhere, shared server calc module)
 - [ ] Set up PostHog account and add real API key to `.env`
 - [ ] TestFlight build: `eas build --platform ios --profile preview` (needs $99 Apple Developer account)
 - [ ] Switch Stripe from test mode to live mode when ready for real money
