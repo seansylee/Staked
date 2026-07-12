@@ -79,6 +79,7 @@ export default function ChallengeDetailScreen() {
   };
 
   const handleQuit = () => {
+    if (!challenge) return;
     const protectedCents = summary?.protectedFunds ?? 0;
     const penaltyCents = Math.round(protectedCents * 0.20);
     const refundCents = protectedCents - penaltyCents;
