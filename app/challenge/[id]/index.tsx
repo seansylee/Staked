@@ -174,19 +174,21 @@ export default function ChallengeDetailScreen() {
           <StakeSummaryPanel summary={summary} />
         </View>
 
-        <View style={styles.checkInSection}>
-          <Text style={styles.sectionLabel}>
-            {challenge.target_count}× per {challenge.goal_window}
-          </Text>
-          <GoalRow
-            currentCount={progress.currentCount}
-            targetCount={progress.targetCount}
-            windowLabel={progress.windowLabel}
-            isCompleted={progress.isCompleted}
-            onCheckIn={logCheckIn}
-            loading={checkInLoading}
-          />
-        </View>
+        {!canComplete && (
+          <View style={styles.checkInSection}>
+            <Text style={styles.sectionLabel}>
+              {challenge.target_count}× per {challenge.goal_window}
+            </Text>
+            <GoalRow
+              currentCount={progress.currentCount}
+              targetCount={progress.targetCount}
+              windowLabel={progress.windowLabel}
+              isCompleted={progress.isCompleted}
+              onCheckIn={logCheckIn}
+              loading={checkInLoading}
+            />
+          </View>
+        )}
 
         {canComplete && (
           <Button
