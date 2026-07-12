@@ -41,9 +41,18 @@ This is an MVP to validate whether users will stake real money to improve follow
 4. **Payment reuse / forged drafts:** migration 006 adds a unique constraint on `challenges.stripe_payment_intent_id` (replay → 409), and `confirm-challenge-start` validates the draft server-side (stake $50–2,500 and must equal `paymentIntent.amount − fee`, duration 1–365, target_count ≥ 1, window enum).
 5. **Webhook retry:** unknown refund ids now return 404 so Stripe retries (heals the event-beats-insert race); previously a 200 meant `refund_status` stuck `pending` forever.
 
-**Known open UX issues (deliberate, not yet fixed):** the financial day boundary is UTC midnight (5pm PT) — evening check-ins land in the next window and the 7pm-local reminder fires after the boundary; no claim CTA/notification when a challenge ends (Stripe refunds become impossible ~180 days after charge); `refund_status: 'failed'` isn't surfaced in the UI; `scheduleDailyReminder` is never called (dead code); check-in `window_key` is client-supplied so past windows can be backfilled via the API.
+**Fixed 2026-07-11 — the five open UX/trust gaps (all previously listed as known-open):**
+1. **Claim CTA:** ended-but-unsettled challenges now render a green "Ready to claim" card state, sorted to the top of the dashboard (`ChallengeCard` + `isChallengeComplete`).
+2. **Refund status surfaced:** `refund_status` added to the `Challenge` type; `RefundStatusNote` shows pending/failed/sent on both summary screens (hidden when refund is $0); History now includes quit challenges (they used to vanish entirely) with a QUIT EARLY tag, failed-refund flag, and a link to the quit summary.
+3. **UTC boundary honesty:** deadline labels and at-risk nudges are computed from the real UTC financial boundary and rendered in local time ("by 5 PM", "by Sun 4 PM") via `nextWindowBoundary`/`hoursUntilWindowEnd`/`windowEndLabel` in `src/utils/dates.ts`. The financial boundary itself is unchanged (still UTC midnight, by design). Also fixed the doubled "by by Sun" nudge text.
+4. **Reminders wired up:** dead `scheduleDailyReminder` replaced with `syncChallengeReminders` (called from the store on fetch/complete/quit): repeating check-in reminder 2h before the UTC boundary (daily-window challenges only), claim notification at challenge end, follow-up nudge 3 days later. Stable notification identifiers make the sync idempotent.
+5. **Server-stamped check-ins (migration 007):** a BEFORE INSERT trigger stamps `window_key` + `logged_at` from `now()` at UTC (formats match the JS calc exactly, incl. ISO week `IYYY-"W"IW`) and rejects check-ins for challenges the user doesn't own / not active / outside the date range. **Live-verified 2026-07-11** with a throwaway user: forged backdated window_key was overridden, pre-start and foreign-challenge inserts rejected. Migration history in sync 001–007.
 
-**Next step:** Set up PostHog (real API key in `.env`), then TestFlight build for real device testing (`eas build --platform ios --profile preview` — needs $99 Apple Developer account).
+Also fixed: `tsc --noEmit` was broken at the config level (TS 6 `baseUrl` deprecation) and hid real type errors — typecheck is green now; run it before committing.
+
+**Known open (found during 2026-07-11 verification, not yet fixed):** the `users_own_challenges` RLS policy is `FOR ALL`, so an authenticated user can INSERT a `challenges` row directly without paying (confirmed live). Not money-exploitable — settlement refunds the recorded payment intent, which is null/fake for forged rows — but it permits garbage data; fix is restricting the policy to SELECT (clients never insert/update challenges; Edge Functions use the service role).
+
+**Next step:** Set up PostHog (real API key in `.env`; app-side instrumentation is already complete), then TestFlight build for real device testing (`eas build --platform ios --profile preview` — needs $99 Apple Developer account; no `eas.json` exists yet, so run `eas build:configure` first).
 
 ---
 
@@ -82,7 +91,7 @@ src/
     supabase.ts         Supabase client singleton
     charities.ts        Dummy charity list (forfeited funds destination) + getCharityById
     demo.ts             Demo mode mock data (EXPO_PUBLIC_DEMO_MODE=true)
-    notifications.ts    Push token registration + daily reminder scheduling
+    notifications.ts    Push token registration + syncChallengeReminders (check-in + claim reminders, idempotent by identifier)
     posthog.ts          PostHog client
   store/
     useAuthStore.ts     Session, user, profile — initialized in root layout
@@ -93,15 +102,15 @@ src/
   api/
     payments.ts         Calls Supabase Edge Functions (create-payment-intent, etc.)
   utils/
-    dates.ts            getWindowKey, getElapsedWindowKeys, challengeEndExclusive, elapsedDays, windowEndLabel, daysUntilWindowEnd
+    dates.ts            getWindowKey, getElapsedWindowKeys, challengeEndExclusive, elapsedDays, nextWindowBoundary, hoursUntilWindowEnd, windowEndLabel, localTimeLabel
     protection.ts       computeProtection, computeGoalProgress, computeDashboardStatus (core financial logic)
     formatting.ts       formatCurrency, formatDate, pluralize
   components/
     ui/                 Button, Card, Input, ProgressBar, Badge
-    challenge/          ChallengeCard, StakeSummaryPanel, GoalRow
+    challenge/          ChallengeCard, StakeSummaryPanel, GoalRow, RefundStatusNote
 
 supabase/
-  migrations/           001–006 (004 merges goals into challenges, 005 adds quit, 006 unique payment_intent)
+  migrations/           001–007 (004 merges goals into challenges, 005 adds quit, 006 unique payment_intent, 007 server-stamps check-in window_key)
   functions/
     _shared/protection.ts     Server-side protection calc — mirrors src/utils/dates.ts + protection.ts, keep in sync
     create-payment-intent/    Returns Stripe client_secret for PaymentSheet
@@ -150,15 +159,15 @@ forfeitedCents = min(missedDayEquivalents × dpv, stake)
 protectedCents = stake - forfeitedCents
 ```
 
-`window_key` is stamped on every check-in at write time (e.g. `"2024-W23"` for weekly goals). This makes counting completions an O(1) indexed DB lookup.
+`window_key` is stamped on every check-in at write time (e.g. `"2024-W23"` for weekly goals). This makes counting completions an O(1) indexed DB lookup. Since migration 007 the stamp is **server-side** (BEFORE INSERT trigger, UTC `now()`) — the client still computes it for optimistic UI/demo mode, but the DB value is authoritative and client-sent values are overwritten.
 
 **Important:** `goal_window` lives directly on the `challenges` table (not a separate `goals` table — that was merged in migration 004).
 
 **All period-boundary math is explicit-UTC** (dates parsed as `T00:00:00Z`, UTC getters throughout) so the client (`src/utils/dates.ts` + `protection.ts`) and the server (`supabase/functions/_shared/protection.ts`, imported by both `complete-challenge` and `quit-challenge`) always produce identical numbers regardless of runtime timezone. If you touch one side, mirror it on the other — the test suite runs green under `TZ=UTC`, `TZ=America/Los_Angeles`, and `TZ=Pacific/Kiritimati`.
 
-Display-only helpers (`windowEndLabel`, `daysUntilWindowEnd`, the at-risk nudge) intentionally stay in device-local time — "tonight" means the user's tonight; the financial boundary is UTC midnight.
+Display helpers (`windowEndLabel`, `hoursUntilWindowEnd`, the at-risk nudge) compute against the real UTC boundary and render it in the user's local time — "by 5 PM" in PT, not "tonight" — so labels never promise more time than the money math allows.
 
-Run tests: `npm test` (9 unit tests in `src/__tests__/protection.test.ts`)
+Run tests: `npm test` (18 unit tests in `src/__tests__/protection.test.ts` + `dates.test.ts`; keep them green under `TZ=UTC`, `TZ=America/Los_Angeles`, and `TZ=Pacific/Kiritimati`)
 
 ---
 
@@ -166,7 +175,7 @@ Run tests: `npm test` (9 unit tests in `src/__tests__/protection.test.ts`)
 
 - `profiles` — extends auth.users, stores stripe_customer_id, push_token
 - `challenges` — stake_amount (cents), duration_days, start_date, end_date, status (`active`/`completed`/`cancelled`/`quit`), target_count, goal_window, charity_id, refund_status (`pending`/`succeeded`/`failed`, added in 003), quit_penalty_cents (added in 005), stripe_payment_intent_id UNIQUE (006 — one challenge per payment)
-- `check_ins` — challenge_id, window_key (stamped at write); no `goal_id` (goals table removed in 004)
+- `check_ins` — challenge_id, window_key + logged_at (server-stamped by trigger since 007; client values ignored); no `goal_id` (goals table removed in 004)
 - `payments` — audit log for deposits and refunds
 
 All tables have RLS (users see only their own data). Auto-trigger creates `profiles` row on signup.
@@ -272,7 +281,7 @@ Run locally: `npx expo start --ios` (requires Node ≥20.13 — run `nvm use 20`
 
 ## Dashboard Card Behaviour
 
-`ChallengeCard` uses `computeDashboardStatus` to show:
+When a challenge has ended but is unsettled (`isChallengeComplete`), the card flips to a claim state — green border, "🎉 Ready to claim" pill, "Tap to claim your $X refund" — and sorts to the top of the dashboard. Otherwise `ChallengeCard` uses `computeDashboardStatus` to show:
 - Streak pill (emoji + "N week/day streak") — bottom-right of the dollar amount
 - Per-goal nudges below the progress bar: `GoalName Nx by <deadline>  $X at stake`
   - Nudge color for at-stake amount: `#A07840` (warm amber)
