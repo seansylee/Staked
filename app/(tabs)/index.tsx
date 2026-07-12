@@ -6,6 +6,7 @@ import { ChallengeCard } from '@/components/challenge/ChallengeCard';
 import { colors } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { Challenge } from '@/types';
+import { isChallengeComplete } from '@/utils/protection';
 
 export default function DashboardScreen() {
   const { challenges, isLoading, fetchChallenges } = useChallengeStore();
@@ -14,7 +15,9 @@ export default function DashboardScreen() {
     fetchChallenges();
   }, [fetchChallenges]);
 
-  const active = challenges.filter((c) => c.status === 'active');
+  const active = challenges
+    .filter((c) => c.status === 'active')
+    .sort((a, b) => Number(isChallengeComplete(b)) - Number(isChallengeComplete(a)));
 
   return (
     <SafeAreaView style={styles.container}>

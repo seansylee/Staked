@@ -6,7 +6,7 @@ import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { Challenge } from '@/types';
 import { formatCurrency, pluralize } from '@/utils/formatting';
-import { computeDashboardStatus, computeProtection, daysRemainingForChallenge } from '@/utils/protection';
+import { computeDashboardStatus, computeProtection, daysRemainingForChallenge, isChallengeComplete } from '@/utils/protection';
 
 interface ChallengeCardProps {
   challenge: Challenge;
@@ -27,16 +27,17 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
   );
 
   const daysLeft = daysRemainingForChallenge(challenge);
+  const readyToClaim = isChallengeComplete(challenge);
 
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, readyToClaim && styles.cardClaim]}
       activeOpacity={0.7}
       onPress={() => router.push(`/challenge/${challenge.id}`)}
     >
       <View style={styles.top}>
         <Text style={styles.name}>{challenge.name}</Text>
-        <Text style={styles.days}>{pluralize(daysLeft, 'day')} left</Text>
+        <Text style={styles.days}>{readyToClaim ? 'Ended' : `${pluralize(daysLeft, 'day')} left`}</Text>
       </View>
 
       <View style={styles.amountRow}>
@@ -44,22 +45,37 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
           <Text style={styles.amount}>{formatCurrency(summary.protectedFunds)}</Text>
           <Text style={styles.amountLabel}>protected</Text>
         </View>
-        <View style={styles.statusPill}>
-          <Text style={styles.statusEmoji}>{status.emoji}</Text>
-          <Text style={styles.statusText}>{status.statusText}</Text>
-        </View>
+        {readyToClaim ? (
+          <View style={[styles.statusPill, styles.claimPill]}>
+            <Text style={styles.statusEmoji}>🎉</Text>
+            <Text style={[styles.statusText, styles.claimPillText]}>Ready to claim</Text>
+          </View>
+        ) : (
+          <View style={styles.statusPill}>
+            <Text style={styles.statusEmoji}>{status.emoji}</Text>
+            <Text style={styles.statusText}>{status.statusText}</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.progressSection}>
         <ProgressBar
           progress={summary.completionPercent / 100}
           height={2}
-          color={colors.white}
+          color={readyToClaim ? colors.success : colors.white}
           backgroundColor={colors.border}
         />
       </View>
 
-      {status.nudge && (
+      {readyToClaim && (
+        <View style={styles.nudgeBox}>
+          <Text style={styles.claimText}>
+            Tap to claim your {formatCurrency(summary.protectedFunds)} refund
+          </Text>
+        </View>
+      )}
+
+      {!readyToClaim && status.nudge && (
         <View style={styles.nudgeBox}>
           <View style={styles.nudgeRow}>
             <Text style={styles.nudgeDot}>·</Text>
@@ -84,6 +100,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     gap: 4,
   },
+  cardClaim: { borderColor: colors.success },
   top: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -125,6 +142,9 @@ const styles = StyleSheet.create({
   },
   statusEmoji: { fontSize: 13 },
   statusText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  claimPill: { backgroundColor: colors.successBg },
+  claimPillText: { color: colors.success },
+  claimText: { fontSize: 12, fontWeight: '600', color: colors.success },
   progressSection: { marginTop: 10, marginBottom: 4 },
   nudgeBox: { marginTop: 8 },
   nudgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
