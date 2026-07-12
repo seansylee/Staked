@@ -114,7 +114,7 @@ export function daysUntilWindowEnd(window: Window, referenceDate: Date = new Dat
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function localTimeLabel(d: Date): string {
+export function localTimeLabel(d: Date): string {
   const h = d.getHours();
   const m = d.getMinutes();
   if (h === 0 && m === 0) return 'midnight';

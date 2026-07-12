@@ -1,6 +1,7 @@
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { DEMO_CHECK_INS, DEMO_CHALLENGES, DEMO_MODE } from '@/lib/demo';
+import { syncChallengeReminders } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import { Challenge, ChallengeDraft, CheckIn } from '@/types';
 import { getWindowKey } from '@/utils/dates';
@@ -82,6 +83,7 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
     }
 
     set({ challenges, checkInsMap, isLoading: false });
+    syncChallengeReminders(challenges);
   },
 
   subscribeToCheckIns: (challengeId) => {
@@ -239,6 +241,7 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
         c.id === updatedChallenge.id ? updatedChallenge : c
       ),
     }));
+    syncChallengeReminders(get().challenges);
   },
 
   setChallengeQuit: (updatedChallenge) => {
@@ -247,5 +250,6 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
         c.id === updatedChallenge.id ? updatedChallenge : c
       ),
     }));
+    syncChallengeReminders(get().challenges);
   },
 }));
