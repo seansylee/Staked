@@ -5,6 +5,7 @@ import {
   elapsedDays,
   getElapsedWindowKeys,
   getWindowKey,
+  hoursUntilWindowEnd,
   windowEndLabel,
 } from './dates';
 
@@ -46,17 +47,12 @@ export function computeDashboardStatus(
     else break;
   }
 
-  const isAtRisk = !allCurrentComplete && (() => {
-    if (goal_window === 'daily') return referenceDate.getHours() >= 18;
-    if (goal_window === 'weekly') {
-      const day = referenceDate.getDay();
-      return day === 0 || day >= 5;
-    }
-    const daysInMonth = new Date(
-      referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0
-    ).getDate();
-    return daysInMonth - referenceDate.getDate() <= 3;
-  })();
+  const hoursLeft = hoursUntilWindowEnd(goal_window, referenceDate);
+  const isAtRisk = !allCurrentComplete && (
+    goal_window === 'daily' ? hoursLeft <= 6 :
+    goal_window === 'weekly' ? hoursLeft <= 60 :
+    hoursLeft <= 72
+  );
 
   const periodLabel = goal_window === 'daily' ? 'day' : goal_window === 'weekly' ? 'week' : 'month';
 

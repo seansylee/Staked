@@ -82,37 +82,66 @@ export function getElapsedWindowKeys(
   return keys;
 }
 
-export function daysUntilWindowEnd(window: Window, referenceDate: Date = new Date()): number {
+// The check-in window closes at UTC midnight, not local midnight — that is
+// where the money math flips a period to "missed". The helpers below expose
+// that real boundary, rendered in the user's local time (e.g. "5 PM" in PT),
+// so deadline labels never promise more time than the user actually has.
+
+export function nextWindowBoundary(window: Window, referenceDate: Date = new Date()): Date {
   if (window === 'daily') {
-    const midnight = new Date(referenceDate);
-    midnight.setHours(23, 59, 59, 999);
-    return Math.ceil((midnight.getTime() - referenceDate.getTime()) / 3_600_000) / 24;
+    const d = utcMidnight(referenceDate);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d;
   }
   if (window === 'weekly') {
-    // ISO week ends Sunday
-    const day = referenceDate.getDay(); // 0=Sun
-    const daysLeft = day === 0 ? 0 : 7 - day;
-    return daysLeft;
+    const d = isoWeekMonday(referenceDate);
+    d.setUTCDate(d.getUTCDate() + 7);
+    return d;
   }
-  // monthly
-  const lastDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0);
-  return lastDay.getDate() - referenceDate.getDate();
+  const d = monthStart(referenceDate);
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  return d;
 }
 
+export function hoursUntilWindowEnd(window: Window, referenceDate: Date = new Date()): number {
+  return (nextWindowBoundary(window, referenceDate).getTime() - referenceDate.getTime()) / 3_600_000;
+}
+
+export function daysUntilWindowEnd(window: Window, referenceDate: Date = new Date()): number {
+  return Math.floor(hoursUntilWindowEnd(window, referenceDate) / 24);
+}
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function localTimeLabel(d: Date): string {
+  const h = d.getHours();
+  const m = d.getMinutes();
+  if (h === 0 && m === 0) return 'midnight';
+  const suffix = h < 12 ? 'AM' : 'PM';
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${hr} ${suffix}` : `${hr}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+// Phrases are composed after "by" in nudges: "by 5 PM", "by 9 AM tomorrow",
+// "by Sun 5 PM", "by Jun 30".
 export function windowEndLabel(window: Window, referenceDate: Date = new Date()): string {
-  if (window === 'daily') return 'tonight';
-  if (window === 'weekly') {
-    const days = daysUntilWindowEnd('weekly', referenceDate);
-    if (days === 0) return 'today';
-    if (days === 1) return 'tomorrow';
-    const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const endDay = new Date(referenceDate);
-    endDay.setDate(endDay.getDate() + days);
-    return `by ${names[endDay.getDay()]}`;
+  const boundary = nextWindowBoundary(window, referenceDate);
+  const lastMoment = new Date(boundary.getTime() - 1);
+  const time = localTimeLabel(boundary);
+  const msLeft = boundary.getTime() - referenceDate.getTime();
+  const sameLocalDay =
+    lastMoment.getDate() === referenceDate.getDate() &&
+    lastMoment.getMonth() === referenceDate.getMonth() &&
+    lastMoment.getFullYear() === referenceDate.getFullYear();
+
+  if (msLeft <= 26 * 3_600_000) {
+    return sameLocalDay ? time : `${time} tomorrow`;
   }
-  const lastDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0);
-  const daysLeft = lastDay.getDate() - referenceDate.getDate();
-  return `${daysLeft}d left in month`;
+  if (msLeft <= 7 * 86_400_000) {
+    return `${DAY_NAMES[lastMoment.getDay()]} ${time}`;
+  }
+  return `${MONTH_NAMES[lastMoment.getMonth()]} ${lastMoment.getDate()}`;
 }
 
 // First instant after the challenge's final day (end_date is inclusive)
