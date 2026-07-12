@@ -107,6 +107,7 @@ export default function ChallengeDetailScreen() {
                   forfeited_amount_cents: (challenge.stake_amount - protectedCents) + penaltyCents,
                   quit_penalty_cents: penaltyCents,
                   stripe_refund_id: 'demo-refund',
+                  refund_status: 'pending' as const,
                   updated_at: now,
                 };
                 setChallengeQuit(demoUpdated);

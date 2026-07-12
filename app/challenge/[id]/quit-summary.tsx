@@ -1,6 +1,7 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefundStatusNote } from '@/components/challenge/RefundStatusNote';
 import { Button } from '@/components/ui/Button';
 import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
@@ -33,7 +34,11 @@ export default function QuitSummaryScreen() {
         <View style={styles.hero}>
           <Text style={styles.heroLabel}>Challenge Ended Early</Text>
           <Text style={styles.heroName}>{challenge.name}</Text>
-          <Text style={styles.heroSub}>Your refund is on the way</Text>
+          <Text style={styles.heroSub}>
+            {challenge.refund_status === 'failed'
+              ? 'There was a problem with your refund'
+              : 'Your refund is on the way'}
+          </Text>
         </View>
 
         <View style={styles.card}>
@@ -57,9 +62,7 @@ export default function QuitSummaryScreen() {
           <Row label="Duration" value={`${challenge.duration_days} days`} />
         </View>
 
-        <Text style={styles.note}>
-          Refunds typically appear in 5–10 business days depending on your bank.
-        </Text>
+        <RefundStatusNote challenge={challenge} />
 
         <Button title="Back to Dashboard" onPress={() => router.replace('/(tabs)')} />
       </ScrollView>
@@ -126,5 +129,4 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 4 },
-  note: { fontSize: 12, color: colors.textMuted, textAlign: 'center', paddingHorizontal: 8 },
 });

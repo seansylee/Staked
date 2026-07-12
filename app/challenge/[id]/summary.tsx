@@ -1,6 +1,7 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefundStatusNote } from '@/components/challenge/RefundStatusNote';
 import { Button } from '@/components/ui/Button';
 import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
@@ -52,6 +53,8 @@ export default function CompletionSummaryScreen() {
             large
           />
         </View>
+
+        <RefundStatusNote challenge={challenge} />
 
         <View style={styles.card}>
           <Row label="Start" value={formatDate(challenge.start_date)} />

@@ -221,6 +221,7 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
       forfeited_amount_cents: null,
       charity_id: draft.charity_id,
       quit_penalty_cents: null,
+      refund_status: null,
       created_at: now.toISOString(),
     };
 

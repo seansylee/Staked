@@ -8,7 +8,7 @@ import { formatCurrency, formatDate } from '@/utils/formatting';
 
 export default function HistoryScreen() {
   const challenges = useChallengeStore((s) => s.challenges);
-  const completed = challenges.filter((c) => c.status === 'completed');
+  const settled = challenges.filter((c) => c.status === 'completed' || c.status === 'quit');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -16,23 +16,32 @@ export default function HistoryScreen() {
         <Text style={styles.title}>History</Text>
       </View>
 
-      {completed.length === 0 ? (
+      {settled.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No completed challenges</Text>
+          <Text style={styles.emptyTitle}>No past challenges</Text>
           <Text style={styles.emptySubtitle}>Finish a challenge to see it here.</Text>
         </View>
       ) : (
         <FlatList<Challenge>
-          data={completed}
+          data={settled}
           keyExtractor={(c) => c.id}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.7}
-              onPress={() => router.push(`/challenge/${item.id}/summary`)}
+              onPress={() =>
+                router.push(
+                  item.status === 'quit'
+                    ? `/challenge/${item.id}/quit-summary`
+                    : `/challenge/${item.id}/summary`
+                )
+              }
             >
               <View style={styles.cardTop}>
-                <Text style={styles.cardName}>{item.name}</Text>
+                <View style={styles.cardTitleRow}>
+                  <Text style={styles.cardName}>{item.name}</Text>
+                  {item.status === 'quit' && <Text style={styles.quitTag}>QUIT EARLY</Text>}
+                </View>
                 <Text style={styles.cardDate}>{formatDate(item.end_date)}</Text>
               </View>
               <View style={styles.cardAmounts}>
@@ -55,6 +64,9 @@ export default function HistoryScreen() {
                   </View>
                 )}
               </View>
+              {item.refund_status === 'failed' && (item.protected_amount_cents ?? 0) > 0 && (
+                <Text style={styles.refundFailed}>Refund failed — contact support</Text>
+              )}
             </TouchableOpacity>
           )}
           contentContainerStyle={styles.list}
@@ -82,8 +94,21 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   cardName: { fontSize: 16, fontWeight: '700', color: colors.text },
+  quitTag: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 0.6,
+    backgroundColor: colors.surfaceHigh,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+  },
   cardDate: { fontSize: 12, color: colors.textSecondary },
+  refundFailed: { fontSize: 12, fontWeight: '600', color: colors.danger },
   cardAmounts: { flexDirection: 'row', gap: 28 },
   amountLabel: {
     fontSize: 10,

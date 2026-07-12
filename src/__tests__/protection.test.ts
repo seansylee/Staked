@@ -19,6 +19,7 @@ const makeChallenge = (override: Partial<Challenge> = {}): Challenge => ({
   forfeited_amount_cents: null,
   charity_id: null,
   quit_penalty_cents: null,
+  refund_status: null,
   created_at: '2024-01-01T00:00:00Z',
   ...override,
 });

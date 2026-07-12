@@ -2,6 +2,8 @@ export type Window = 'daily' | 'weekly' | 'monthly';
 
 export type ChallengeStatus = 'active' | 'completed' | 'cancelled' | 'quit';
 
+export type RefundStatus = 'pending' | 'succeeded' | 'failed';
+
 export interface Profile {
   id: string;
   email: string;
@@ -29,6 +31,7 @@ export interface Challenge {
   forfeited_amount_cents: number | null;
   charity_id: string | null;
   quit_penalty_cents: number | null;
+  refund_status: RefundStatus | null;
   created_at: string;
 }
 

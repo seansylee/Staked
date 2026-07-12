@@ -35,6 +35,7 @@ export const DEMO_CHALLENGES: Challenge[] = [
     forfeited_amount_cents: null,
     charity_id: 'clean-water',
     quit_penalty_cents: null,
+    refund_status: null,
     created_at: daysAgo(28),
   },
   {
@@ -55,6 +56,7 @@ export const DEMO_CHALLENGES: Challenge[] = [
     forfeited_amount_cents: null,
     charity_id: 'food-bank',
     quit_penalty_cents: null,
+    refund_status: null,
     created_at: daysAgo(10),
   },
 ];
