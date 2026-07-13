@@ -5,6 +5,14 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-04-10',
 });
 
+// Clients can only UPDATE profiles.push_token (migration 009); writing
+// stripe_customer_id needs the service role. Ownership is enforced by the
+// verified user id in the filter below.
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+);
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
@@ -47,7 +55,7 @@ Deno.serve(async (req) => {
     });
     customerId = customer.id;
 
-    await supabase
+    await supabaseAdmin
       .from('profiles')
       .update({ stripe_customer_id: customerId })
       .eq('id', user.id);
