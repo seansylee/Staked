@@ -6,6 +6,14 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-04-10',
 });
 
+// RLS makes challenges/payments read-only for user JWTs (migration 008), so
+// writes must use the service role — the challenge lookup below filters on the
+// verified user id, which is what enforces ownership.
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+);
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
@@ -26,7 +34,7 @@ Deno.serve(async (req) => {
   const { challenge_id } = await req.json();
   if (!challenge_id) return new Response('Missing challenge_id', { status: 400 });
 
-  const { data: challenge, error: challengeError } = await supabase
+  const { data: challenge, error: challengeError } = await supabaseAdmin
     .from('challenges')
     .select('*')
     .eq('id', challenge_id)
@@ -44,7 +52,7 @@ Deno.serve(async (req) => {
     return new Response('Challenge has not ended yet', { status: 400 });
   }
 
-  const { data: checkIns } = await supabase
+  const { data: checkIns } = await supabaseAdmin
     .from('check_ins')
     .select('window_key')
     .eq('challenge_id', challenge_id);
@@ -69,7 +77,7 @@ Deno.serve(async (req) => {
     refundId = refund.id;
   }
 
-  const { data: updatedChallenge, error: updateError } = await supabase
+  const { data: updatedChallenge, error: updateError } = await supabaseAdmin
     .from('challenges')
     .update({
       status: 'completed',
@@ -84,7 +92,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (updateError || !updatedChallenge) {
-    const { data: current } = await supabase
+    const { data: current } = await supabaseAdmin
       .from('challenges')
       .select('status')
       .eq('id', challenge_id)
@@ -99,7 +107,7 @@ Deno.serve(async (req) => {
   }
 
   if (refundId) {
-    const { error: paymentError } = await supabase.from('payments').insert({
+    const { error: paymentError } = await supabaseAdmin.from('payments').insert({
       challenge_id,
       user_id: user.id,
       type: 'refund',

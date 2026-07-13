@@ -15,7 +15,8 @@ This is an MVP to validate whether users will stake real money to improve follow
 **Backend is live and connected. Single-goal model shipped (commit `e99ed29`). Quit-challenge feature shipped (commit `4d082d2`).**
 
 - ✅ Supabase project live: `https://xctocyxiwnjdltxqlqyl.supabase.co`
-- ✅ Database migrations 001–006 all applied to the live DB **and recorded in the remote migration history** (verified 2026-07-10 — `npx supabase migration list --linked` shows local and remote in sync)
+- ✅ Database migrations 001–008 all applied to the live DB **and recorded in the remote migration history** (verified 2026-07-13 — `npx supabase migration list --linked` shows local and remote in sync)
+- ✅ Supabase MCP server connected (`.mcp.json`, OAuth) — can inspect/apply migrations, deploy Edge Functions, run SQL, and check advisors without the CLI
 - ✅ All 5 Edge Functions deployed to Supabase (includes `handle-stripe-webhook` and `quit-challenge`)
 - ✅ Stripe secret key set as Supabase secret (`STRIPE_SECRET_KEY`)
 - ✅ `.env` filled with real keys, `EXPO_PUBLIC_DEMO_MODE=false`
@@ -50,7 +51,14 @@ This is an MVP to validate whether users will stake real money to improve follow
 
 Also fixed: `tsc --noEmit` was broken at the config level (TS 6 `baseUrl` deprecation) and hid real type errors — typecheck is green now; run it before committing.
 
-**Known open (found during 2026-07-11 verification, not yet fixed):** the `users_own_challenges` RLS policy is `FOR ALL`, so an authenticated user can INSERT a `challenges` row directly without paying (confirmed live). Not money-exploitable — settlement refunds the recorded payment intent, which is null/fake for forged rows — but it permits garbage data; fix is restricting the policy to SELECT (clients never insert/update challenges; Edge Functions use the service role).
+**Fixed 2026-07-13 — RLS lockdown (migration 008, applied + live-verified via the Supabase MCP):**
+1. The known-open `FOR ALL` policy problem was worse than documented: it existed on **all four tables**, and the UPDATE path **was** money-exploitable — an authenticated user could rewrite `challenges.start_date`/`end_date`/`stake_amount` on a legitimately-paid challenge before settling, or rewrite `check_ins.window_key` after insert (the 007 trigger is BEFORE INSERT only), backdating check-ins to protect forfeited funds.
+2. Policies are now: `challenges`/`payments` SELECT-only; `check_ins` SELECT + INSERT (no UPDATE/DELETE → `window_key` immutable once stamped); `profiles` SELECT + UPDATE (client writes `push_token`, `create-payment-intent` writes `stripe_customer_id` under the user's JWT). All use `(SELECT auth.uid())` (per-statement caching, clears advisor 0003).
+3. **Prerequisite discovered during this fix:** the old "Edge Functions use the service role" claim was false — only the webhook did; the other functions wrote with the *user's* JWT. `confirm-challenge-start`, `complete-challenge`, and `quit-challenge` now do all DB reads/writes through a `supabaseAdmin` (service role) client, keeping the anon+JWT client only for `auth.getUser()`; ownership is enforced by explicit `user_id` filters. Redeployed before the migration so prod never broke in between.
+4. Also in 008: `stamp_check_in` gets `SET search_path = ''` with schema-qualified references (advisor 0011); `handle_new_user`/`stamp_check_in` EXECUTE revoked from anon/authenticated/PUBLIC (advisors 0028/0029 — triggers still fire, EXECUTE is only checked at creation); covering indexes on `check_ins.user_id` + `payments.user_id` (advisor 0001, also serve the RLS filters).
+5. Live-verified as a simulated authenticated user (rollback-wrapped): forged challenge INSERT → RLS violation; challenge UPDATE / check_in UPDATE → 0 rows; forged payments INSERT → RLS violation; check-in INSERT still works with the trigger overriding a forged backdated key; own-profile UPDATE works. All three redeployed functions boot (anon-JWT smoke test → clean 401 from the auth check). Advisors clean, migration list in sync 001–008, tests 18/18, typecheck green.
+
+**Known open:** Supabase Auth "leaked password protection" (HaveIBeenPwned check) is disabled — dashboard-only toggle, no API/MCP surface: Dashboard → Authentication → Providers → Email → enable leaked password protection.
 
 **Next step:** Set up PostHog (real API key in `.env`; app-side instrumentation is already complete), then TestFlight build for real device testing (`eas build --platform ios --profile preview` — needs $99 Apple Developer account; no `eas.json` exists yet, so run `eas build:configure` first).
 
@@ -110,7 +118,7 @@ src/
     challenge/          ChallengeCard, StakeSummaryPanel, GoalRow, RefundStatusNote
 
 supabase/
-  migrations/           001–007 (004 merges goals into challenges, 005 adds quit, 006 unique payment_intent, 007 server-stamps check-in window_key)
+  migrations/           001–008 (004 merges goals into challenges, 005 adds quit, 006 unique payment_intent, 007 server-stamps check-in window_key, 008 locks RLS to read-only + hardens functions)
   functions/
     _shared/protection.ts     Server-side protection calc — mirrors src/utils/dates.ts + protection.ts, keep in sync
     create-payment-intent/    Returns Stripe client_secret for PaymentSheet
@@ -178,7 +186,7 @@ Run tests: `npm test` (18 unit tests in `src/__tests__/protection.test.ts` + `da
 - `check_ins` — challenge_id, window_key + logged_at (server-stamped by trigger since 007; client values ignored); no `goal_id` (goals table removed in 004)
 - `payments` — audit log for deposits and refunds
 
-All tables have RLS (users see only their own data). Auto-trigger creates `profiles` row on signup.
+All tables have RLS (users see only their own data). Since migration 008 client JWTs are **read-only** on `challenges`/`payments`; the only client writes are `check_ins` INSERT (trigger-validated) and the own `profiles` row (UPDATE). All other writes happen in Edge Functions via the service role. Auto-trigger creates `profiles` row on signup.
 
 ---
 

@@ -5,6 +5,13 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-04-10',
 });
 
+// RLS makes challenges/payments read-only for user JWTs (migration 008), so
+// writes must use the service role — ownership comes from the verified user id.
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+);
+
 const PLATFORM_FEE_CENTS = 300;
 const MIN_STAKE_CENTS = 5000; // $50
 const MAX_STAKE_CENTS = 250000; // $2,500
@@ -84,7 +91,7 @@ Deno.serve(async (req) => {
     .toISOString()
     .slice(0, 10);
 
-  const { data: challenge, error: challengeError } = await supabase
+  const { data: challenge, error: challengeError } = await supabaseAdmin
     .from('challenges')
     .insert({
       user_id: user.id,
@@ -110,7 +117,7 @@ Deno.serve(async (req) => {
     return new Response('Failed to create challenge', { status: 500 });
   }
 
-  await supabase.from('payments').insert({
+  await supabaseAdmin.from('payments').insert({
     challenge_id: challenge.id,
     user_id: user.id,
     type: 'deposit',
