@@ -51,6 +51,9 @@ export default function CharityScreen() {
                 <Text style={styles.name}>{c.name}</Text>
                 <Text style={styles.tagline}>{c.tagline}</Text>
                 <Text style={styles.description}>{c.description}</Text>
+                <Text style={styles.meta}>
+                  501(c)(3) · EIN {c.ein} · {c.website}
+                </Text>
               </View>
               <View style={[styles.radio, isActive && styles.radioActive]}>
                 {isActive && <Text style={styles.radioCheck}>✓</Text>}
@@ -58,6 +61,11 @@ export default function CharityScreen() {
             </TouchableOpacity>
           );
         })}
+
+        <Text style={styles.disclaimer}>
+          Staked donates 100% of forfeited stakes in a monthly batch. Charities listed are
+          independent organizations, not affiliated with or endorsing Staked.
+        </Text>
 
         <Button title="Next: Review →" onPress={onNext} disabled={!selected} />
       </ScrollView>
@@ -95,6 +103,8 @@ const styles = StyleSheet.create({
   name: { fontSize: 16, fontWeight: '700', color: colors.text },
   tagline: { fontSize: 13, color: colors.textSecondary },
   description: { fontSize: 12, color: colors.textMuted, lineHeight: 17, marginTop: 2 },
+  meta: { fontSize: 10, color: colors.textMuted, marginTop: 4, letterSpacing: 0.2 },
+  disclaimer: { fontSize: 11, color: colors.textMuted, lineHeight: 16, textAlign: 'center', paddingHorizontal: 8 },
   radio: {
     width: 24,
     height: 24,

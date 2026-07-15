@@ -11,6 +11,7 @@ import { posthog } from '@/lib/posthog';
 import { useCheckIn } from '@/hooks/useCheckIn';
 import { colors, radius } from '@/constants/theme';
 import { DEMO_MODE } from '@/lib/demo';
+import { getCharityById } from '@/lib/charities';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { computeGoalProgress, computeProtection, daysRemainingForChallenge, isChallengeComplete } from '@/utils/protection';
 import { formatCurrency, formatDateShort, pluralize } from '@/utils/formatting';
@@ -150,6 +151,7 @@ export default function ChallengeDetailScreen() {
 
   const daysLeft = daysRemainingForChallenge(challenge);
   const canComplete = isChallengeComplete(challenge);
+  const charity = getCharityById(challenge.charity_id);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -174,6 +176,12 @@ export default function ChallengeDetailScreen() {
         <View style={styles.vaultSection}>
           <StakeSummaryPanel summary={summary} />
         </View>
+
+        {charity && !canComplete && (
+          <Text style={styles.charityNote}>
+            Anything you forfeit is donated to {charity.emoji} {charity.name}
+          </Text>
+        )}
 
         {!canComplete && (
           <View style={styles.checkInSection}>
@@ -238,6 +246,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginTop: 12,
+  },
+  charityNote: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
   },
   checkInSection: {
     backgroundColor: colors.surface,
