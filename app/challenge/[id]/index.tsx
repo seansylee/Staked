@@ -15,20 +15,21 @@ import { useChallengeStore } from '@/store/useChallengeStore';
 import { computeGoalProgress, computeProtection, daysRemainingForChallenge, isChallengeComplete } from '@/utils/protection';
 import { formatCurrency, formatDateShort, pluralize } from '@/utils/formatting';
 
+const NO_CHECK_INS: never[] = [];
+
 export default function ChallengeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [completing, setCompleting] = useState(false);
   const [quitting, setQuitting] = useState(false);
 
   const challenges = useChallengeStore((s) => s.challenges);
-  const checkInsMap = useChallengeStore((s) => s.checkInsMap);
   const subscribeToCheckIns = useChallengeStore((s) => s.subscribeToCheckIns);
   const unsubscribeAll = useChallengeStore((s) => s.unsubscribeAll);
   const setChallengeCompleted = useChallengeStore((s) => s.setChallengeCompleted);
   const setChallengeQuit = useChallengeStore((s) => s.setChallengeQuit);
 
   const challenge = challenges.find((c) => c.id === id);
-  const checkIns = checkInsMap[id] ?? [];
+  const checkIns = useChallengeStore((s) => s.checkInsMap[id]) ?? NO_CHECK_INS;
 
   const { logCheckIn, loading: checkInLoading } = useCheckIn(id);
 

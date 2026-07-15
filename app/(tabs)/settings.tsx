@@ -1,4 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors, radius } from '@/constants/theme';
@@ -40,7 +41,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionLabel}>App</Text>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Version</Text>
-            <Text style={styles.rowValue}>1.0.0</Text>
+            <Text style={styles.rowValue}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
           </View>
         </View>
 

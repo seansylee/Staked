@@ -259,4 +259,4 @@ No automatic verification.
 
 Primary objective:
 
-Validate whether users are willing to stœake real money to improve follow-through.
+Validate whether users are willing to stake real money to improve follow-through.

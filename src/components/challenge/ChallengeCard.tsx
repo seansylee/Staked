@@ -12,9 +12,10 @@ interface ChallengeCardProps {
   challenge: Challenge;
 }
 
+const NO_CHECK_INS: never[] = [];
+
 export function ChallengeCard({ challenge }: ChallengeCardProps) {
-  const checkInsMap = useChallengeStore((s) => s.checkInsMap);
-  const checkIns = checkInsMap[challenge.id] ?? [];
+  const checkIns = useChallengeStore((s) => s.checkInsMap[challenge.id]) ?? NO_CHECK_INS;
 
   const summary = useMemo(
     () => computeProtection(challenge, checkIns),

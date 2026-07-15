@@ -6,16 +6,20 @@
     "scheme": "staked",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0E1019",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.staked.app"
+      "bundleIdentifier": "com.staked.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.staked.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0E1019",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -33,6 +37,14 @@
         {
           "merchantIdentifier": "merchant.com.staked.app",
           "enableGooglePay": true
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0E1019",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160
         }
       ]
     ],
