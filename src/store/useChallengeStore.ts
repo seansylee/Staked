@@ -1,7 +1,7 @@
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { DEMO_CHECK_INS, DEMO_CHALLENGES, DEMO_MODE } from '@/lib/demo';
-import { syncChallengeReminders } from '@/lib/notifications';
+import { clearAllReminders, syncChallengeReminders } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import { Challenge, ChallengeDraft, CheckIn } from '@/types';
 import { getWindowKey } from '@/utils/dates';
@@ -14,6 +14,7 @@ interface ChallengeState {
   _channel: RealtimeChannel | null;
 
   fetchChallenges: () => Promise<void>;
+  reset: () => void;
   subscribeToCheckIns: (challengeId: string) => void;
   unsubscribeAll: () => void;
   setDraft: (draft: Partial<ChallengeDraft>) => void;
@@ -84,6 +85,15 @@ export const useChallengeStore = create<ChallengeState>((set, get) => ({
 
     set({ challenges, checkInsMap, isLoading: false });
     syncChallengeReminders(challenges);
+  },
+
+  // Wipes user-scoped state on sign-out so the next account never sees the
+  // previous user's challenges, and stale reminders don't keep firing.
+  reset: () => {
+    const { _channel } = get();
+    if (_channel) _channel.unsubscribe();
+    clearAllReminders();
+    set({ challenges: [], checkInsMap: {}, isLoading: false, draft: null, _channel: null });
   },
 
   subscribeToCheckIns: (challengeId) => {

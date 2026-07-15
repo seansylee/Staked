@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { z } from 'zod';
-import { registerForPushNotifications } from '@/lib/notifications';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -13,14 +12,14 @@ import { useAuthStore } from '@/store/useAuthStore';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
-  password: z.string().min(1, 'Password is required'),
 });
 
 type FormData = z.infer<typeof schema>;
 
-export default function SignInScreen() {
+export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
-  const signIn = useAuthStore((s) => s.signIn);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const requestPasswordReset = useAuthStore((s) => s.requestPasswordReset);
 
   const { control, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -29,16 +28,31 @@ export default function SignInScreen() {
   const onSubmit = async (data: FormData) => {
     setLoading(true);
     try {
-      await signIn(data.email, data.password);
-      registerForPushNotifications();
-      router.replace('/(tabs)');
+      await requestPasswordReset(data.email);
+      setSentTo(data.email);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Sign in failed. Please try again.';
+      const message = err instanceof Error ? err.message : 'Could not send the reset email.';
       Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }
   };
+
+  if (sentTo) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.sentContent}>
+          <Text style={styles.emoji}>📬</Text>
+          <Text style={styles.title}>Check your inbox</Text>
+          <Text style={styles.subtitle}>
+            If an account exists for <Text style={styles.email}>{sentTo}</Text>, a reset link is on
+            its way. Open it on this phone to set a new password.
+          </Text>
+          <Button title="Back to Sign In" onPress={() => router.replace('/(auth)/sign-in')} style={styles.btn} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -48,8 +62,8 @@ export default function SignInScreen() {
         </TouchableOpacity>
 
         <View style={styles.header}>
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>Sign in to check your stake.</Text>
+          <Text style={styles.title}>Reset password</Text>
+          <Text style={styles.subtitle}>We&apos;ll email you a reset link.</Text>
         </View>
 
         <View style={styles.form}>
@@ -70,34 +84,8 @@ export default function SignInScreen() {
               />
             )}
           />
-          <Controller
-            control={control}
-            name="password"
-            render={({ field: { onChange, value } }) => (
-              <Input
-                label="Password"
-                placeholder="Your password"
-                secureTextEntry
-                autoComplete="current-password"
-                textContentType="password"
-                value={value}
-                onChangeText={onChange}
-                error={errors.password?.message}
-              />
-            )}
-          />
-          <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={styles.forgotRow}>
-            <Text style={styles.forgotText}>Forgot password?</Text>
-          </TouchableOpacity>
-          <Button title="Sign In" onPress={handleSubmit(onSubmit)} loading={loading} style={styles.btn} />
+          <Button title="Send Reset Link" onPress={handleSubmit(onSubmit)} loading={loading} style={styles.btn} />
         </View>
-
-        <TouchableOpacity onPress={() => router.replace('/(auth)/sign-up')} style={styles.switchRow}>
-          <Text style={styles.switchText}>
-            No account?{' '}
-            <Text style={styles.switchLink}>Create one</Text>
-          </Text>
-        </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -110,12 +98,10 @@ const styles = StyleSheet.create({
   backText: { fontSize: 22, color: colors.textSecondary },
   header: { gap: 8, marginBottom: 40 },
   title: { fontSize: 32, fontFamily: 'HelveticaNeue-CondensedBlack', color: colors.text, letterSpacing: -0.5, transform: [{ scaleY: 1.35 }] },
-  subtitle: { fontSize: 16, color: colors.textSecondary },
+  subtitle: { fontSize: 16, color: colors.textSecondary, lineHeight: 24 },
+  email: { color: colors.text, fontWeight: '600' },
   form: { gap: 20 },
   btn: { marginTop: 8 },
-  forgotRow: { alignSelf: 'flex-end', marginTop: -8 },
-  forgotText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
-  switchRow: { marginTop: 28, alignItems: 'center' },
-  switchText: { fontSize: 14, color: colors.textSecondary },
-  switchLink: { color: colors.text, fontWeight: '600' },
+  sentContent: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 12 },
+  emoji: { fontSize: 44 },
 });

@@ -30,8 +30,26 @@ export default function SignUpScreen() {
   const onSubmit = async (data: FormData) => {
     setLoading(true);
     try {
-      await signUp(data.email, data.password);
+      const result = await signUp(data.email, data.password);
       posthog.capture('user_signed_up');
+
+      if (result.maybeExistingAccount) {
+        Alert.alert(
+          'Account may already exist',
+          'If this email is already registered you won’t receive a new confirmation. Try signing in instead.',
+          [
+            { text: 'Sign In', onPress: () => router.replace('/(auth)/sign-in') },
+            { text: 'OK', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+
+      if (result.needsEmailConfirmation) {
+        router.replace({ pathname: '/(auth)/confirm-email', params: { email: data.email } });
+        return;
+      }
+
       registerForPushNotifications();
       router.replace('/(tabs)');
     } catch (err: unknown) {
@@ -64,6 +82,9 @@ export default function SignUpScreen() {
                 label="Email"
                 placeholder="you@example.com"
                 keyboardType="email-address"
+                autoComplete="email"
+                textContentType="emailAddress"
+                autoCorrect={false}
                 value={value}
                 onChangeText={onChange}
                 error={errors.email?.message}
@@ -78,6 +99,8 @@ export default function SignUpScreen() {
                 label="Password"
                 placeholder="Min. 8 characters"
                 secureTextEntry
+                autoComplete="new-password"
+                textContentType="newPassword"
                 value={value}
                 onChangeText={onChange}
                 error={errors.password?.message}

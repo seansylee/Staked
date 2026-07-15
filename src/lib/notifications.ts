@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -15,34 +16,51 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Never throws — callers fire-and-forget this during sign-in/sign-up, and a
+// notification failure must not break auth. getExpoPushTokenAsync in
+// particular throws in dev builds when no EAS projectId is configured yet.
 export async function registerForPushNotifications(): Promise<string | null> {
-  if (!Device.isDevice) return null;
+  try {
+    if (DEMO_MODE || !Device.isDevice) return null;
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
 
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== 'granted') return null;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+      });
+    }
+
+    const projectId: string | undefined =
+      Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
+    const token = (
+      await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
+    ).data;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ push_token: token }).eq('id', user.id);
+    }
+
+    return token;
+  } catch (err) {
+    console.warn('Push notification registration failed', err);
+    return null;
   }
+}
 
-  if (finalStatus !== 'granted') return null;
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-    });
-  }
-
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    await supabase.from('profiles').update({ push_token: token }).eq('id', user.id);
-  }
-
-  return token;
+export function clearAllReminders(): void {
+  if (DEMO_MODE) return;
+  Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
 }
 
 const CHECK_IN_LEAD_MS = 2 * 3_600_000;
