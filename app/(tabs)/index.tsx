@@ -10,10 +10,21 @@ import { isChallengeComplete } from '@/utils/protection';
 
 export default function DashboardScreen() {
   const { challenges, isLoading, fetchChallenges } = useChallengeStore();
+  const recoverPendingConfirmation = useChallengeStore((s) => s.recoverPendingConfirmation);
 
   useEffect(() => {
     fetchChallenges();
   }, [fetchChallenges]);
+
+  // Heal any paid-but-unconfirmed challenge (app killed or offline right
+  // after the Stripe charge). Waits for the persisted store to rehydrate.
+  useEffect(() => {
+    if (useChallengeStore.persist.hasHydrated()) {
+      recoverPendingConfirmation();
+      return;
+    }
+    return useChallengeStore.persist.onFinishHydration(() => recoverPendingConfirmation());
+  }, [recoverPendingConfirmation]);
 
   const active = challenges
     .filter((c) => c.status === 'active')

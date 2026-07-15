@@ -13,9 +13,10 @@ import { posthog } from '@/lib/posthog';
 import { DEMO_MODE } from '@/lib/demo';
 import { useUIStore } from '@/store/useUIStore';
 import { getCharityById } from '@/lib/charities';
-import { confirmChallengeStart, createPaymentIntent } from '@/api/payments';
+import { ApiError, confirmChallengeStart, createPaymentIntent } from '@/api/payments';
 import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
+import { ChallengeDraft } from '@/types';
 import { formatCurrency } from '@/utils/formatting';
 
 const PLATFORM_FEE_CENTS = 300;
@@ -44,7 +45,16 @@ const sheetAppearance = {
 } as const;
 
 export default function PaymentScreen() {
-  const { draft, clearDraft, fetchChallenges, addDemoChallenge } = useChallengeStore();
+  const {
+    draft,
+    clearDraft,
+    fetchChallenges,
+    addDemoChallenge,
+    pendingPayment,
+    setPendingPayment,
+    pendingConfirmation,
+    setPendingConfirmation,
+  } = useChallengeStore();
   const showToast = useUIStore((s) => s.showToast);
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { isPlatformPaySupported, confirmPlatformPayPayment } = usePlatformPay();
@@ -60,41 +70,88 @@ export default function PaymentScreen() {
   }, [isPlatformPaySupported]);
 
   useEffect(() => {
-    if (!draft && !completing.current) router.replace('/challenge/new/details');
-  }, [draft]);
+    if (!draft && !pendingConfirmation && !completing.current) {
+      router.replace('/challenge/new/details');
+    }
+  }, [draft, pendingConfirmation]);
 
-  if (!draft) return null;
+  if (!draft && !pendingConfirmation) return null;
 
-  const totalCents = draft.stake_amount_cents + PLATFORM_FEE_CENTS;
-  const charity = getCharityById(draft.charity_id);
-  const windowLabel = draft.goal_window === 'daily' ? 'day' : draft.goal_window === 'weekly' ? 'week' : 'month';
+  // A paid-but-unconfirmed challenge takes precedence: the card was already
+  // charged for pendingConfirmation.draft, so that's the challenge to finish.
+  const activeDraft = (pendingConfirmation?.draft ?? draft) as ChallengeDraft;
+  const alreadyPaid = !!pendingConfirmation;
 
-  const finalizeChallenge = async (paymentIntentId: string) => {
-    await confirmChallengeStart(paymentIntentId, draft);
+  const totalCents = activeDraft.stake_amount_cents + PLATFORM_FEE_CENTS;
+  const charity = getCharityById(activeDraft.charity_id);
+  const windowLabel =
+    activeDraft.goal_window === 'daily' ? 'day' : activeDraft.goal_window === 'weekly' ? 'week' : 'month';
+
+  // One payment intent per draft+amount, reused across retries and sheet
+  // cancellations — a retry can never create a second charge.
+  const getOrCreateIntent = async () => {
+    if (pendingPayment && pendingPayment.amountCents === totalCents) {
+      return pendingPayment;
+    }
+    const handle = await createPaymentIntent(totalCents);
+    const pending = { ...handle, amountCents: totalCents };
+    setPendingPayment(pending);
+    return pending;
+  };
+
+  const finishCreation = async (paymentIntentId: string, draftToConfirm: ChallengeDraft) => {
+    try {
+      await confirmChallengeStart(paymentIntentId, draftToConfirm);
+    } catch (err) {
+      // 409 = this payment already created its challenge (an earlier retry
+      // landed) — that's success, not failure.
+      if (!(err instanceof ApiError && err.status === 409)) throw err;
+    }
+    setPendingConfirmation(null);
     posthog.capture('challenge_created', {
-      stake_cents: draft.stake_amount_cents,
-      duration_days: draft.duration_days,
-      goal_window: draft.goal_window,
-      target_count: draft.target_count,
+      stake_cents: draftToConfirm.stake_amount_cents,
+      duration_days: draftToConfirm.duration_days,
+      goal_window: draftToConfirm.goal_window,
+      target_count: draftToConfirm.target_count,
     });
     await fetchChallenges();
-    const dollars = Math.round(draft.stake_amount_cents / 100);
-    showToast(`🔥 ${draft.name} is live! $${dollars} is on the line — make it count.`);
+    const stakeDollars = Math.round(draftToConfirm.stake_amount_cents / 100);
+    showToast(`🔥 ${draftToConfirm.name} is live! $${stakeDollars} is on the line — make it count.`);
     completing.current = true;
     clearDraft();
     router.replace('/(tabs)');
   };
 
-  const handleWalletPay = async () => {
+  const alertSetupPending = () => {
+    Alert.alert(
+      'Payment received',
+      "Your payment went through, but the challenge couldn't be created yet. Tap “Finish Setup” to complete it — you will not be charged again."
+    );
+  };
+
+  const handleFinishSetup = async () => {
+    if (!pendingConfirmation) return;
     setLoading(true);
     try {
-      const clientSecret = await createPaymentIntent(totalCents);
-      const { error, paymentIntent } = await confirmPlatformPayPayment(clientSecret, {
+      await finishCreation(pendingConfirmation.paymentIntentId, pendingConfirmation.draft);
+    } catch {
+      alertSetupPending();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWalletPay = async () => {
+    setLoading(true);
+    let paid = false;
+    try {
+      const intent = await getOrCreateIntent();
+      const { error } = await confirmPlatformPayPayment(intent.clientSecret, {
         applePay: {
           merchantCountryCode: 'US',
           currencyCode: 'USD',
           cartItems: [
-            { label: 'Stake (refundable)', amount: dollars(draft.stake_amount_cents), paymentType: PlatformPay.PaymentType.Immediate },
+            { label: 'Stake (refundable)', amount: dollars(activeDraft.stake_amount_cents), paymentType: PlatformPay.PaymentType.Immediate },
             { label: 'Platform fee', amount: dollars(PLATFORM_FEE_CENTS), paymentType: PlatformPay.PaymentType.Immediate },
             { label: 'Staked', amount: dollars(totalCents), paymentType: PlatformPay.PaymentType.Immediate },
           ],
@@ -112,10 +169,17 @@ export default function PaymentScreen() {
         }
         return;
       }
-      await finalizeChallenge(paymentIntent!.id);
+      paid = true;
+      setPendingConfirmation({ paymentIntentId: intent.paymentIntentId, draft: activeDraft });
+      setPendingPayment(null);
+      await finishCreation(intent.paymentIntentId, activeDraft);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
-      Alert.alert('Error', message);
+      if (paid) {
+        alertSetupPending();
+      } else {
+        const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
+        Alert.alert('Error', message);
+      }
     } finally {
       setLoading(false);
     }
@@ -123,34 +187,35 @@ export default function PaymentScreen() {
 
   const handlePay = async () => {
     setLoading(true);
+    let paid = false;
     try {
       if (DEMO_MODE) {
-        addDemoChallenge(draft);
+        addDemoChallenge(activeDraft);
         posthog.capture('challenge_created', {
-          stake_cents: draft.stake_amount_cents,
-          duration_days: draft.duration_days,
-          goal_window: draft.goal_window,
-          target_count: draft.target_count,
+          stake_cents: activeDraft.stake_amount_cents,
+          duration_days: activeDraft.duration_days,
+          goal_window: activeDraft.goal_window,
+          target_count: activeDraft.target_count,
           demo: true,
         });
-        const dollars = Math.round(draft.stake_amount_cents / 100);
-        showToast(`🔥 ${draft.name} is live! $${dollars} is on the line — make it count.`);
+        const stakeDollars = Math.round(activeDraft.stake_amount_cents / 100);
+        showToast(`🔥 ${activeDraft.name} is live! $${stakeDollars} is on the line — make it count.`);
         completing.current = true;
         clearDraft();
         router.replace('/(tabs)');
         return;
       }
 
-      const clientSecret = await createPaymentIntent(totalCents);
+      const intent = await getOrCreateIntent();
       const { error: initError } = await initPaymentSheet({
-        paymentIntentClientSecret: clientSecret,
+        paymentIntentClientSecret: intent.clientSecret,
         merchantDisplayName: 'Staked',
         returnURL: 'staked://payment-complete',
         appearance: sheetAppearance,
         applePay: {
           merchantCountryCode: 'US',
           cartItems: [
-            { label: 'Stake (refundable)', amount: dollars(draft.stake_amount_cents), paymentType: 'Immediate' },
+            { label: 'Stake (refundable)', amount: dollars(activeDraft.stake_amount_cents), paymentType: 'Immediate' },
             { label: 'Platform fee', amount: dollars(PLATFORM_FEE_CENTS), paymentType: 'Immediate' },
             { label: 'Staked', amount: dollars(totalCents), paymentType: 'Immediate' },
           ],
@@ -161,7 +226,12 @@ export default function PaymentScreen() {
           currencyCode: 'USD',
         },
       });
-      if (initError) throw new Error(initError.message);
+      if (initError) {
+        // The stored intent may be unusable (e.g. cancelled server-side) —
+        // drop it so the next attempt starts fresh.
+        setPendingPayment(null);
+        throw new Error(initError.message);
+      }
 
       const { error: presentError } = await presentPaymentSheet();
       if (presentError) {
@@ -172,11 +242,17 @@ export default function PaymentScreen() {
         return;
       }
 
-      const paymentIntentId = clientSecret.split('_secret_')[0];
-      await finalizeChallenge(paymentIntentId);
+      paid = true;
+      setPendingConfirmation({ paymentIntentId: intent.paymentIntentId, draft: activeDraft });
+      setPendingPayment(null);
+      await finishCreation(intent.paymentIntentId, activeDraft);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
-      Alert.alert('Error', message);
+      if (paid) {
+        alertSetupPending();
+      } else {
+        const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
+        Alert.alert('Error', message);
+      }
     } finally {
       setLoading(false);
     }
@@ -193,55 +269,70 @@ export default function PaymentScreen() {
         <Text style={styles.title}>Review & Pay</Text>
 
         <View style={styles.card}>
-          <SummaryRow label="Challenge" value={draft.name} />
-          <SummaryRow label="Duration" value={`${draft.duration_days} days`} />
-          <SummaryRow label="Goal" value={`${draft.target_count}× per ${windowLabel}`} />
+          <SummaryRow label="Challenge" value={activeDraft.name} />
+          <SummaryRow label="Duration" value={`${activeDraft.duration_days} days`} />
+          <SummaryRow label="Goal" value={`${activeDraft.target_count}× per ${windowLabel}`} />
           {charity && <SummaryRow label="Charity" value={`${charity.emoji} ${charity.name}`} />}
         </View>
 
         <View style={styles.card}>
-          <SummaryRow label="Stake" value={formatCurrency(draft.stake_amount_cents)} />
+          <SummaryRow label="Stake" value={formatCurrency(activeDraft.stake_amount_cents)} />
           <SummaryRow label="Platform fee" value={formatCurrency(PLATFORM_FEE_CENTS)} />
           <View style={styles.divider} />
           <SummaryRow label="Total" value={formatCurrency(totalCents)} large />
         </View>
 
         <Text style={styles.note}>
-          Staked holds your stake for {draft.duration_days} days. Protected funds are returned to you
-          when the challenge ends
+          Staked holds your stake for {activeDraft.duration_days} days. Protected funds are returned
+          to you when the challenge ends
           {charity
             ? `; anything forfeited is donated to ${charity.name} at the end of the month.`
             : '.'}
         </Text>
 
-        {walletSupported && (
+        {alreadyPaid ? (
           <>
-            <PlatformPayButton
-              type={PlatformPay.ButtonType.Pay}
-              appearance={PlatformPay.ButtonStyle.White}
-              disabled={loading}
-              onPress={handleWalletPay}
-              style={styles.walletButton}
-            />
-            <View style={styles.orRow}>
-              <View style={styles.orLine} />
-              <Text style={styles.orText}>or</Text>
-              <View style={styles.orLine} />
+            <View style={styles.paidBox}>
+              <Text style={styles.paidTitle}>✓ Payment received</Text>
+              <Text style={styles.paidBody}>
+                One last step didn&apos;t finish. Tap below to create your challenge — you will not
+                be charged again.
+              </Text>
             </View>
+            <Button title="Finish Setup — Already Paid" onPress={handleFinishSetup} loading={loading} />
+          </>
+        ) : (
+          <>
+            {walletSupported && (
+              <>
+                <PlatformPayButton
+                  type={PlatformPay.ButtonType.Pay}
+                  appearance={PlatformPay.ButtonStyle.White}
+                  disabled={loading}
+                  onPress={handleWalletPay}
+                  style={styles.walletButton}
+                />
+                <View style={styles.orRow}>
+                  <View style={styles.orLine} />
+                  <Text style={styles.orText}>or</Text>
+                  <View style={styles.orLine} />
+                </View>
+              </>
+            )}
+
+            <Button
+              title={`Pay ${formatCurrency(totalCents)} & Start`}
+              onPress={handlePay}
+              loading={loading}
+            />
+
+            <Text style={styles.methods}>
+              {walletSupported
+                ? 'One-tap with Apple Pay or Google Pay, or pay by card'
+                : 'Pay securely with card, Apple Pay, or Google Pay'}
+            </Text>
           </>
         )}
-
-        <Button
-          title={`Pay ${formatCurrency(totalCents)} & Start`}
-          onPress={handlePay}
-          loading={loading}
-        />
-
-        <Text style={styles.methods}>
-          {walletSupported
-            ? 'One-tap with Apple Pay or Google Pay, or pay by card'
-            : 'Pay securely with card, Apple Pay, or Google Pay'}
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -306,6 +397,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
   },
+  paidBox: {
+    backgroundColor: colors.successBg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.success,
+    padding: 14,
+    gap: 4,
+  },
+  paidTitle: { fontSize: 13, fontWeight: '700', color: colors.success },
+  paidBody: { fontSize: 12, color: colors.textSecondary, lineHeight: 18 },
   walletButton: {
     width: '100%',
     height: 50,

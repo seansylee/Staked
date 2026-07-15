@@ -34,8 +34,24 @@ Deno.serve(async (req) => {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const { amount_cents } = await req.json();
-  if (!amount_cents || amount_cents < 5300) { // $50 stake + $3 fee minimum
+  let amount_cents: unknown;
+  try {
+    ({ amount_cents } = await req.json());
+  } catch {
+    return new Response('Invalid JSON body', { status: 400 });
+  }
+
+  // $50 stake + $3 fee … $2,500 stake + $3 fee. Without the upper bound a
+  // hostile client could mint an arbitrarily large PaymentIntent and charge a
+  // card for an amount confirm-challenge-start would then reject — an
+  // orphaned charge needing a manual refund.
+  const MIN_TOTAL_CENTS = 5300;
+  const MAX_TOTAL_CENTS = 250300;
+  if (
+    !Number.isInteger(amount_cents) ||
+    (amount_cents as number) < MIN_TOTAL_CENTS ||
+    (amount_cents as number) > MAX_TOTAL_CENTS
+  ) {
     return new Response('Invalid amount', { status: 400 });
   }
 
