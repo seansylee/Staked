@@ -64,11 +64,19 @@ async function handleRefundUpdated(refund: Stripe.Refund): Promise<boolean> {
     return false;
   }
 
-  // Mirror refund_status onto the challenge for easy querying
-  await supabase
+  // Mirror refund_status onto the challenge for easy querying. Checked:
+  // a silent failure here leaves the challenge stuck on "pending" while the
+  // payments row says succeeded (observed live during a settle/webhook race)
+  // — returning false makes Stripe redeliver, and the daily settle sweep
+  // reconciles any drift that still slips through.
+  const { error: challengeError } = await supabase
     .from('challenges')
     .update({ refund_status: refund.status })
     .eq('id', payment.challenge_id);
+  if (challengeError) {
+    console.error('Challenge refund_status mirror failed', payment.challenge_id, challengeError);
+    return false;
+  }
 
   if (refund.status === 'failed') {
     console.error(
