@@ -17,7 +17,7 @@ This is an MVP to validate whether users will stake real money to improve follow
 - ✅ Supabase project live: `https://xctocyxiwnjdltxqlqyl.supabase.co`
 - ✅ Database migrations 001–009 all applied to the live DB **and recorded in the remote migration history** (verified 2026-07-13 — `npx supabase migration list --linked` shows local and remote in sync)
 - ✅ Supabase MCP server connected (`.mcp.json`, OAuth) — can inspect/apply migrations, deploy Edge Functions, run SQL, and check advisors without the CLI
-- ✅ All 5 Edge Functions deployed to Supabase (includes `handle-stripe-webhook` and `quit-challenge`)
+- ✅ All 7 Edge Functions deployed to Supabase (includes `handle-stripe-webhook`, `quit-challenge`, `delete-account`, `settle-ended-challenges`)
 - ✅ Stripe secret key set as Supabase secret (`STRIPE_SECRET_KEY`)
 - ✅ `.env` filled with real keys, `EXPO_PUBLIC_DEMO_MODE=false`
 - ✅ App running locally (`npx expo start --ios`, requires `nvm use 20`)
@@ -62,9 +62,25 @@ Also fixed: `tsc --noEmit` was broken at the config level (TS 6 `baseUrl` deprec
 - **Found + fixed — `profiles` column-write gap:** 008's profiles UPDATE policy plus Supabase's default all-column UPDATE grant let a user rewrite their own `stripe_customer_id` and `email` — both of which `create-payment-intent` trusts (reuses `stripe_customer_id` as the PaymentIntent's Stripe customer; `email` as the customer email). Confirmed reachable live. Migration 009 `REVOKE UPDATE ON profiles` + `GRANT UPDATE (push_token)` — RLS can't scope columns, only grants can. Moved the `stripe_customer_id` write in `create-payment-intent` to the service role and redeployed (deployed build verified byte-equal to repo). Live-verified: `push_token` update still works, any other-column update now `42501 permission denied`.
 - **Verified clean (no action):** `STRIPE_WEBHOOK_SECRET` is set (webhook returns 400 sig-check, not 500 missing); `http`/`pg_net` extensions not installed (no in-DB SSRF); no storage buckets; no views; only the two known functions, both with pinned `search_path`; blanket table grants on challenges/payments/check_ins are inert (no UPDATE/DELETE policy exists, so RLS denies regardless — left at Supabase default). **Auth-critical regression check:** signed up a throwaway user through the public REST endpoint after the 008 EXECUTE-revoke — `handle_new_user` trigger still fired and created the `profiles` row (EXECUTE is only checked at trigger creation, not fire time); user cascade-deleted afterward.
 
-**Known open:** Supabase Auth "leaked password protection" (HaveIBeenPwned check) is disabled — dashboard-only toggle, no API/MCP surface: Dashboard → Authentication → Providers → Email → enable leaked password protection.
+**Production-hardening pass 2026-07-14 (full-stack, all live-verified):**
+1. **App shell:** branded icon/splash/adaptive/favicon assets generated (navy + cream `$` slab — replaced Expo placeholders), `userInterfaceStyle: dark`, splash on `#0E1019`, `ITSAppUsesNonExemptEncryption=false`, light StatusBar, root ErrorBoundary, tab icons (`@expo/vector-icons` + `expo-splash-screen` installed), dead `App.tsx`/`index.ts` template files deleted, `+not-found` + `payment-complete` routes (Stripe returnURL no longer 404s), eslint react-hooks plugin.
+2. **Auth flows (top-ranked gap fixed):** PKCE flow; sign-up with confirm-email-enabled now routes to a "check your inbox" screen (resend w/ cooldown, already-registered detection); confirmation + recovery emails deep-link back (`staked://auth/callback`, `staked://auth/reset` → `app/auth/*` exchange screens); forgot/reset-password screens; sign-out wipes challenge store + cancels all reminders (cross-account privacy); PostHog identify/reset + no-op client when key is a placeholder; push registration never throws. **One-time dashboard step still required:** add both `staked://` URLs to Authentication → URL Configuration → Redirect URLs.
+3. **Double-charge killed (gap #2):** one PaymentIntent per draft+amount reused across retries/cancels; after a successful charge a persisted `pendingConfirmation` {intent, draft} flips the payment screen to "Finish Setup — Already Paid" (only retries the confirm; 409 replay = success); Dashboard silently recovers pending confirmations on mount (survives app kill; hydration-aware). `create-payment-intent` (v5) now rejects non-integer/out-of-range totals (integer $53–$2,503). `api/payments` unwraps Edge Function error bodies into `ApiError {message, status}` — alerts show real reasons now.
+4. **Fetch resilience:** `fetchChallenges` keeps stale data + sets `fetchError` instead of rendering "No active challenges" on a network blip; Dashboard error state/banner + retry; pull-to-refresh on Dashboard + History; History fetches on cold start; error toasts render red.
+5. **Real charities:** seven verified 4-star 501(c)(3)s w/ EINs (GiveDirectly, AMF, St. Jude/ALSAC, MSF, charity: water, Feeding America, Nature Conservancy) in `src/lib/charities.ts`; legacy ids (`clean-water`/`food-bank`/`reforestation`) map to real orgs; non-affiliation disclaimer on the picker; charity now shown on the challenge detail screen.
+6. **Account deletion (App Store 5.1.1(v)):** `delete-account` Edge Function (live-verified: 409 with active challenge; 200 + full auth→profiles→challenges cascade + Stripe customer cleanup after) + Settings UI with double confirm. Settings also gained Contact Support (mailto `src/constants/support.ts`) and in-app Terms/Privacy (`app/legal/*` — accurate to app behavior; needs counsel before real money).
+7. **Auto-settlement (gap #4):** `settle-ended-challenges` Edge Function settles active challenges ended ≥7 days ago (same shared calc + `settle-{id}` idempotency + conditional update; safe under races/replays by construction) — live-tested both paths incl. a real Stripe refund for a month-old unclaimed test challenge. Migration `20260715053554_schedule_auto_settlement` (in remote history; local file matches) enables pg_cron + pg_net (registered under `extensions`, EXECUTE revoked from client roles) and schedules a daily 03:17 UTC job; Vault holds `project_url` + `anon_key` (public values, kept out of the repo anyway). Cron plumbing verified end-to-end (Vault → pg_net → function 200).
+8. **Webhook race found & fixed during verification:** the challenge-side `refund_status` mirror write was unchecked and a live race left a challenge `pending` while its payments row said `succeeded`. Webhook (v4) now fails loudly so Stripe redelivers, and the daily settle job sweeps any remaining payments↔challenges drift (`reconciled` in its summary).
 
-**Next step:** Set up PostHog (real API key in `.env`; app-side instrumentation is already complete), then TestFlight build for real device testing (`eas build --platform ios --profile preview` — needs $99 Apple Developer account; no `eas.json` exists yet, so run `eas build:configure` first).
+Deployed function versions as of 2026-07-14: create-payment-intent v5, confirm-challenge-start (unchanged), complete-challenge (unchanged), quit-challenge (unchanged), handle-stripe-webhook v4 (`--no-verify-jwt`), delete-account v1, settle-ended-challenges v2. All deploys done via the Supabase MCP; deployed builds verified against the repo.
+
+**Known open:**
+- Supabase Auth "leaked password protection" (HaveIBeenPwned check) is disabled — dashboard-only toggle: Dashboard → Authentication → Providers → Email.
+- Redirect-URL allowlist for the two `staked://` deep links — dashboard-only (Authentication → URL Configuration).
+- UTC-boundary deadlines are honest in the UI but still a product-level surprise for US evening users; per-user timezone anchoring is the eventual fix (client+server+trigger in one pass).
+- Legal pages are drafts pending counsel; commercial co-venture registration may be required in some US states once real money flows to named charities.
+
+**Next step:** Set up PostHog (real API key in `.env`; app-side instrumentation incl. identify is complete), add the two redirect URLs in the Supabase dashboard, then TestFlight build (`eas build --platform ios --profile preview` — needs $99 Apple Developer account; no `eas.json` yet, so run `eas build:configure` first; then put the EAS projectId in app.json so push tokens work in dev builds).
 
 ---
 
@@ -122,14 +138,16 @@ src/
     challenge/          ChallengeCard, StakeSummaryPanel, GoalRow, RefundStatusNote
 
 supabase/
-  migrations/           001–009 (004 merges goals into challenges, 005 adds quit, 006 unique payment_intent, 007 server-stamps check-in window_key, 008 locks RLS to read-only + hardens functions, 009 restricts profiles UPDATE to push_token)
+  migrations/           001–009 + 20260715053554 (004 merges goals into challenges, 005 adds quit, 006 unique payment_intent, 007 server-stamps check-in window_key, 008 locks RLS to read-only + hardens functions, 009 restricts profiles UPDATE to push_token, 20260715053554 schedules auto-settlement via pg_cron/pg_net)
   functions/
     _shared/protection.ts     Server-side protection calc — mirrors src/utils/dates.ts + protection.ts, keep in sync
-    create-payment-intent/    Returns Stripe client_secret for PaymentSheet
+    create-payment-intent/    Returns Stripe client_secret for PaymentSheet (validates integer $53–$2,503 total)
     confirm-challenge-start/  Verifies payment with Stripe, then creates challenge in DB
     complete-challenge/       Server-side protection calc, issues Stripe refund, marks complete
     handle-stripe-webhook/    Reconciles async refund.updated events from Stripe (deployed --no-verify-jwt — public endpoint, auth via Stripe signature)
     quit-challenge/           Server-side protection calc, 20% early-exit penalty on protected funds, issues Stripe refund, marks 'quit'
+    delete-account/           In-app account deletion (App Store 5.1.1(v)); 409 while challenges active; cascades + Stripe customer cleanup
+    settle-ended-challenges/  Daily auto-settlement of unclaimed ended challenges + refund-status drift reconciliation (pg_cron, migration 20260715053554)
 ```
 
 ---
@@ -221,7 +239,7 @@ PaymentSheet is Stripe's pre-built UI — it renders Apple Pay / Google Pay as e
 
 ### Charity selection
 
-Step 3 of creation (`app/challenge/new/charity.tsx`) lets the user pick where forfeited funds go. **Dummy charity data for now** — three hard-coded charities in `src/lib/charities.ts`. The choice is stored on `ChallengeDraft.charity_id` / `Challenge.charity_id`, surfaced on the review screen, and **now persisted server-side**: migration `002_add_charity_id.sql` adds the `challenges.charity_id` column and `confirm-challenge-start` writes it.
+Step 2 of creation (`app/challenge/new/charity.tsx`) lets the user pick where forfeited funds go. **Real charities since 2026-07-14** — seven 4-star 501(c)(3)s in `src/lib/charities.ts` with EINs and websites (verified via Charity Navigator July 2026); a legacy-id map keeps pre-existing rows rendering. The choice is stored on `ChallengeDraft.charity_id` / `Challenge.charity_id`, surfaced on the review screen and the challenge detail screen, and persisted server-side (migration 002, `confirm-challenge-start`).
 
 **Donation model = Option A (platform-donates).** Forfeited funds stay in the platform's Stripe balance; Staked donates to the chosen charity in a monthly batch. There is **no per-challenge Stripe payout to charities** — that deliberately avoids money-transmitter / MSB exposure. UI copy reflects this ("Staked holds your stake… anything forfeited is donated to {charity} at the end of the month"). A real `charities` table with Stripe Connect accounts + automated transfers is the future Option B path, still TODO. See `docs/escrow-feasibility.md`.
 
@@ -285,8 +303,13 @@ Run locally: `npx expo start --ios` (requires Node ≥20.13 — run `nvm use 20`
 - [x] Smoke test quit-challenge → refund → webhook reconciliation (2026-07-03)
 - [x] Smoke test normal completion → `complete-challenge` refund → webhook reconciliation (2026-07-09)
 - [x] Fix client/server protection-calc discrepancy in quit-challenge (2026-07-09 — UTC everywhere, shared server calc module)
+- [x] Email-confirmation onboarding, forgot/reset password, deep-link plumbing (2026-07-14)
+- [x] Double-charge fix: payment-intent reuse + persisted confirm recovery (2026-07-14)
+- [x] Real charities, account deletion, legal screens, auto-settlement (2026-07-14)
+- [ ] Supabase dashboard: add `staked://auth/callback` + `staked://auth/reset` to redirect URLs; enable leaked-password protection
 - [ ] Set up PostHog account and add real API key to `.env`
-- [ ] TestFlight build: `eas build --platform ios --profile preview` (needs $99 Apple Developer account)
+- [ ] TestFlight build: `eas build --platform ios --profile preview` (needs $99 Apple Developer account; run `eas build:configure` first)
+- [ ] Legal review of Terms/Privacy + charity-promotion (commercial co-venture) compliance before live mode
 - [ ] Switch Stripe from test mode to live mode when ready for real money
 
 ---

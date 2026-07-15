@@ -15,7 +15,9 @@ This is a manual check-in MVP — no AI verification, no social layer. Just a fi
 1. **Create a challenge** — set a goal, stake amount, and duration
 2. **Pay via Stripe** — funds are held; Apple Pay and Google Pay supported
 3. **Log check-ins daily** — each logged day protects that day's value
-4. **Challenge ends** — protected amount is refunded; forfeited funds go to your chosen charity
+4. **Challenge ends** — protected amount is refunded; forfeited funds go to your chosen charity (real 4-star 501(c)(3)s: GiveDirectly, Against Malaria Foundation, St. Jude, Doctors Without Borders, charity: water, Feeding America, The Nature Conservancy)
+
+Challenges left unclaimed after they end are settled automatically by a daily server-side job, so refunds never expire against Stripe's ~180-day limit.
 
 ## Tech Stack
 
@@ -33,10 +35,12 @@ This is a manual check-in MVP — no AI verification, no social layer. Just a fi
 
 ```
 app/                    Screens (Expo Router)
-  (auth)/               Welcome, sign-up, sign-in
+  (auth)/               Welcome, sign-up/in, confirm-email, forgot/reset password
   (tabs)/               Dashboard, History, Settings
+  auth/                 Deep-link targets for confirmation + recovery emails
   challenge/new/        3-step creation: details → charity → payment
   challenge/[id]/       Check-ins and completion summary
+  legal/                Terms of Service, Privacy Policy
 
 src/
   api/                  Edge Function calls (Stripe payment flow)
@@ -48,8 +52,9 @@ src/
   constants/theme.ts    Dark navy design system
 
 supabase/
-  migrations/           Postgres schema + RLS policies
-  functions/            Edge Functions (Stripe operations, webhook handler)
+  migrations/           Postgres schema, RLS policies, auto-settlement cron
+  functions/            Edge Functions (Stripe operations, webhook handler,
+                        account deletion, daily auto-settlement)
 ```
 
 ## Running Locally
@@ -102,4 +107,4 @@ Each challenge has a single goal — `goal_window` (daily/weekly/monthly) and `t
 npm test
 ```
 
-Six unit tests covering the core protection and date-window logic in `src/__tests__/protection.test.ts`.
+Unit tests cover the core protection and date-window logic (`src/__tests__/`). Keep them green under `TZ=UTC`, `TZ=America/Los_Angeles`, and `TZ=Pacific/Kiritimati` — all financial boundaries are UTC.

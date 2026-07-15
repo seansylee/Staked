@@ -4,7 +4,7 @@ Every flow a customer can encounter, with the exact screens, money mechanics, an
 edge cases behind each one. Sources of truth: `app/` screens, `src/utils/protection.ts`
 (client calc), `supabase/functions/` (server calc — always authoritative for money).
 
-Last verified against the codebase: 2026-07-12.
+Last verified against the codebase: 2026-07-14.
 
 ---
 
@@ -32,27 +32,40 @@ payout account, no partial withdrawals. One payment in, at most one refund out.
 
 ### 1.2 Sign up
 - Email + password (min 8 chars, zod-validated inline).
-- On success: PostHog `user_signed_up`, push-notification permission prompt
-  (`registerForPushNotifications`), straight to Dashboard.
 - A DB trigger auto-creates the `profiles` row.
-- Failure (email taken, weak password, network): alert with the Supabase error,
-  PostHog `sign_up_failed`.
+- **Email confirmation is enabled** on the live project and fully handled
+  (fixed 2026-07-14): when sign-up returns no session, the app routes to a
+  "Check your inbox" screen with a resend button (30s cooldown). The
+  confirmation email deep-links back into the app (`staked://auth/callback`),
+  exchanges the PKCE code, and lands on the Dashboard signed in. Confirmed on
+  another device instead? The pending screen's "I've confirmed — Sign In"
+  path covers it.
+- Already-registered emails (Supabase returns an identity-less user to block
+  enumeration) get a "try signing in instead" alert.
+- Failure (weak password, network): alert with the Supabase error, PostHog
+  `sign_up_failed`.
 
-> ⚠️ **Known gap:** the app assumes sign-up returns a live session, but the live
-> Supabase project has **email confirmation enabled** (verified 2026-07-11: REST
-> sign-up returns `confirmation_sent_at` and no access token). A fresh production
-> sign-up lands on the Dashboard signed-out — empty state, no explanation, no
-> "check your email" screen. Fix before TestFlight: either disable confirm-email
-> in Supabase Auth settings for the MVP, or add a confirmation-pending screen.
+> One-time dashboard prerequisite: `staked://auth/callback` and
+> `staked://auth/reset` must be in Authentication → URL Configuration →
+> Redirect URLs.
 
 ### 1.3 Sign in
 - Email + password. Wrong credentials → alert. Success → Dashboard, push
   token re-registered.
+- **Forgot password** (added 2026-07-14): request screen → recovery email →
+  deep link (`staked://auth/reset`) → new-password screen (`updateUser`).
+  Expired/foreign-device links degrade to a "request a new link" screen.
 
 ### 1.4 Session persistence & sign out
 - Supabase session persists across launches; users skip auth entirely.
-- Sign out lives in Settings, behind a confirm dialog → Welcome screen.
-- Settings otherwise shows only account email and app version.
+- Sign out lives in Settings, behind a confirm dialog → Welcome screen. It
+  wipes the challenge store and cancels every scheduled reminder, so a second
+  account on the same device never sees the first account's data or
+  notifications.
+- Settings also has Contact Support (mailto), Terms of Service, Privacy
+  Policy, and **Delete Account** (double-confirm → `delete-account` Edge
+  Function; refused with a clear message while any challenge is active;
+  cascades all rows and removes the Stripe customer object).
 
 ---
 
@@ -66,8 +79,12 @@ payout account, no partial withdrawals. One payment in, at most one refund out.
 - The draft persists in the store — backing out and returning keeps the values.
 
 ### Step 2 — Charity (`challenge/new/charity`)
-- Pick where forfeited money goes (3 hard-coded charities for MVP).
-- Choice is persisted server-side on the challenge (`charity_id`).
+- Pick where forfeited money goes: seven real 4-star 501(c)(3)s
+  (GiveDirectly, Against Malaria Foundation, St. Jude, Doctors Without
+  Borders, charity: water, Feeding America, The Nature Conservancy), each
+  card showing EIN + website, with a non-affiliation disclaimer.
+- Choice is persisted server-side on the challenge (`charity_id`); legacy ids
+  from pre-2026-07-14 rows resolve to the matching real org.
 
 ### Step 3 — Review & Pay (`challenge/new/payment`)
 - Summary of challenge + cost breakdown: **stake + $3 platform fee = total**.
@@ -91,11 +108,11 @@ payout account, no partial withdrawals. One payment in, at most one refund out.
 
 | Scenario | What happens |
 |---|---|
-| Taps X / swipes away the sheet | Silent return to review screen; no charge |
-| Card declined | "Payment Failed" alert with Stripe's reason; can retry |
+| Taps X / swipes away the sheet | Silent return to review screen; no charge. The same payment intent is reused on retry — never a second charge |
+| Card declined | "Payment Failed" alert with Stripe's real reason; retry reuses the intent |
 | Wallet auth fails/cancelled | Same — cancel is silent, real errors alert |
-| Network drops **after** charge but before challenge creation | Alert; draft intact. ⚠️ **Known gap:** retrying the Pay button creates a *new* payment intent → the customer is charged twice, and the first (orphaned) charge must be refunded manually in the Stripe dashboard. No automatic recovery yet. |
-| Kills app mid-payment | Payment intent may complete at Stripe with no challenge → same orphaned-charge situation |
+| Network drops **after** charge but before challenge creation | Persisted `pendingConfirmation` records the paid intent + draft; the screen flips to "✓ Payment received / Finish Setup — Already Paid" and only retries the confirm. Server's one-challenge-per-intent 409 is treated as success. **No double charge is possible.** (Fixed 2026-07-14) |
+| Kills app mid-payment | `pendingConfirmation` survives in AsyncStorage; the Dashboard silently completes the challenge on next launch and toasts "your payment went through" |
 
 ---
 
@@ -167,8 +184,12 @@ payout account, no partial withdrawals. One payment in, at most one refund out.
 - Check-in UI disappears from the detail screen; a "Complete Challenge" button
   appears instead.
 - **Settling late costs nothing** — windows after end_date never count as missed.
-- ⚠️ Hard deadline: Stripe cannot refund a charge older than ~180 days. A
-  customer who ignores the app for 6 months loses the refund path entirely.
+- **Auto-settlement (added 2026-07-14):** a daily pg_cron job invokes
+  `settle-ended-challenges`, which settles any active challenge that ended
+  ≥7 days ago — same server calc, same `settle-{id}` idempotency key, races
+  with a user-initiated claim resolve to exactly one refund. A customer who
+  never opens the app again still gets their protected money back, well
+  inside Stripe's ~180-day refund limit.
 
 ### 4.2 Claiming
 - "Complete Challenge" → confirm dialog → `complete-challenge` Edge Function:
@@ -249,9 +270,12 @@ no money-transmitter exposure. See `docs/escrow-feasibility.md`.
 | Check in after challenge end / before start / on settled challenge | Rejected by trigger |
 | Reuse one payment intent for two challenges | 409 (unique constraint) |
 | Forge draft values at confirm time (stake mismatch, 400-day duration…) | 400 (server-side validation) |
+| Mint an oversized/absurd PaymentIntent via the API | 400 — `create-payment-intent` enforces integer $53–$2,503 total (fixed 2026-07-14) |
 | Complete before end date for a full refund (skipping quit penalty) | 400 |
 | Concurrent double-quit for two refunds | One 200, one 409, one refund |
-| Insert a `challenges` row directly without paying | ⚠️ **Currently possible** (RLS policy is FOR ALL). Not money-exploitable — settlement refunds the recorded payment intent, which is null/fake — but it creates garbage data. Fix: restrict policy to SELECT. |
+| Trigger auto-settlement early / repeatedly | Harmless by construction: only ≥7-days-ended challenges, frozen payouts, owner-only refunds, idempotency keys |
+| Insert a `challenges` row directly without paying | RLS violation — client JWTs are SELECT-only on `challenges`/`payments` since migration 008 |
+| Delete account to dodge a bad challenge outcome | 409 while any challenge is active; settled money is already settled |
 
 ---
 
@@ -271,12 +295,18 @@ no money-transmitter exposure. See `docs/escrow-feasibility.md`.
 
 ## 10. Open gaps affecting customers (ranked)
 
-1. **Sign-up with email confirmation enabled strands the user** (§1.2) — blocks
-   real onboarding; fix before TestFlight.
-2. **Double-charge on retry after pay-then-confirm failure** (§2) — rare but
-   costs real money and requires manual Stripe cleanup.
-3. **UTC boundary = early-evening deadline in the Americas** (§3.2) — honest in
-   the UI now, but still a product-level surprise.
-4. **180-day unclaimed refund expiry** (§4.1) — reminders mitigate; no
-   server-side auto-settle yet.
-5. **Unpaid challenge inserts via API** (§8) — data hygiene, not money.
+Resolved 2026-07-13/14: sign-up stranding (§1.2), double-charge on retry
+(§2), 180-day refund expiry (§4.1, auto-settlement), unpaid challenge
+inserts (migration 008). Remaining:
+
+1. **UTC boundary = early-evening deadline in the Americas** (§3.2) — honest
+   in the UI, but still a product-level surprise. Eventual fix: per-user
+   (or per-challenge) timezone anchoring; requires client+server calc,
+   check-in trigger, and migration work in one pass.
+2. **Redirect URLs must be allowlisted in the Supabase dashboard** (§1.2) —
+   until then, confirmation/recovery emails fall back to the project's Site
+   URL instead of deep-linking into the app. One-time setup step.
+3. **Leaked-password protection is a dashboard-only toggle** — still off
+   (Supabase advisor); enable under Authentication → Providers → Email.
+4. **Legal pages are founder-drafted** — accurate to app behavior but not
+   yet reviewed by counsel; required before charging real (non-test) money.
