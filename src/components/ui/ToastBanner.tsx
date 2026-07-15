@@ -9,8 +9,12 @@ export function ToastBanner() {
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(-120)).current;
   const lastMessage = useRef('');
+  const lastType = useRef<'success' | 'error'>('success');
 
-  if (toast?.message) lastMessage.current = toast.message;
+  if (toast?.message) {
+    lastMessage.current = toast.message;
+    lastType.current = toast.type;
+  }
 
   useEffect(() => {
     if (toast) {
@@ -32,7 +36,11 @@ export function ToastBanner() {
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.banner, { top: insets.top + 12, transform: [{ translateY }] }]}
+      style={[
+        styles.banner,
+        lastType.current === 'error' && styles.bannerError,
+        { top: insets.top + 12, transform: [{ translateY }] },
+      ]}
     >
       <Text style={styles.message}>{lastMessage.current}</Text>
     </Animated.View>
@@ -52,6 +60,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 14,
   },
+  bannerError: { borderColor: colors.danger },
   message: {
     color: colors.text,
     fontSize: 15,

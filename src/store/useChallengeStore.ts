@@ -29,6 +29,7 @@ interface ChallengeState {
   challenges: Challenge[];
   checkInsMap: Record<string, CheckIn[]>; // challenge_id → check-ins
   isLoading: boolean;
+  fetchError: string | null;
   draft: ChallengeDraft | null;
   pendingPayment: PendingPayment | null;
   pendingConfirmation: PendingConfirmation | null;
@@ -75,6 +76,7 @@ export const useChallengeStore = create<ChallengeState>()(
       challenges: DEMO_MODE ? DEMO_CHALLENGES : [],
       checkInsMap: demoCheckInsMap ?? {},
       isLoading: false,
+      fetchError: null,
       draft: null,
       pendingPayment: null,
       pendingConfirmation: null,
@@ -91,40 +93,53 @@ export const useChallengeStore = create<ChallengeState>()(
         }
 
         set({ isLoading: true });
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          set({ isLoading: false });
-          return;
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user) {
+            set({ isLoading: false });
+            return;
+          }
+
+          const { data: challenges, error: challengesError } = await supabase
+            .from('challenges')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+          if (challengesError || !challenges) {
+            throw challengesError ?? new Error('No data returned');
+          }
+
+          const ids = challenges.map((c) => c.id);
+
+          let checkIns: CheckIn[] = [];
+          if (ids.length > 0) {
+            const { data, error: checkInsError } = await supabase
+              .from('check_ins')
+              .select('*')
+              .in('challenge_id', ids);
+            if (checkInsError) throw checkInsError;
+            checkIns = data ?? [];
+          }
+
+          const checkInsMap: Record<string, CheckIn[]> = {};
+          for (const ci of checkIns) {
+            if (!checkInsMap[ci.challenge_id]) checkInsMap[ci.challenge_id] = [];
+            checkInsMap[ci.challenge_id].push(ci);
+          }
+
+          set({ challenges, checkInsMap, isLoading: false, fetchError: null });
+          syncChallengeReminders(challenges);
+        } catch (err) {
+          // Keep whatever is already on screen — a network blip must never
+          // look like the user's staked challenges vanished.
+          const message =
+            err && typeof err === 'object' && 'message' in err && typeof err.message === 'string'
+              ? err.message
+              : 'Could not load your challenges.';
+          set({ isLoading: false, fetchError: message });
         }
-
-        const { data: challenges } = await supabase
-          .from('challenges')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (!challenges) {
-          set({ isLoading: false });
-          return;
-        }
-
-        const ids = challenges.map((c) => c.id);
-
-        const { data: checkIns } = await supabase
-          .from('check_ins')
-          .select('*')
-          .in('challenge_id', ids);
-
-        const checkInsMap: Record<string, CheckIn[]> = {};
-        for (const ci of checkIns ?? []) {
-          if (!checkInsMap[ci.challenge_id]) checkInsMap[ci.challenge_id] = [];
-          checkInsMap[ci.challenge_id].push(ci);
-        }
-
-        set({ challenges, checkInsMap, isLoading: false });
-        syncChallengeReminders(challenges);
       },
 
       // Wipes user-scoped state on sign-out so the next account never sees the
@@ -137,6 +152,7 @@ export const useChallengeStore = create<ChallengeState>()(
           challenges: [],
           checkInsMap: {},
           isLoading: false,
+          fetchError: null,
           draft: null,
           pendingPayment: null,
           pendingConfirmation: null,

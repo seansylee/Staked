@@ -1,6 +1,7 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { Challenge } from '@/types';
@@ -8,7 +9,25 @@ import { formatCurrency, formatDate } from '@/utils/formatting';
 
 export default function HistoryScreen() {
   const challenges = useChallengeStore((s) => s.challenges);
+  const fetchChallenges = useChallengeStore((s) => s.fetchChallenges);
+  const [refreshing, setRefreshing] = useState(false);
   const settled = challenges.filter((c) => c.status === 'completed' || c.status === 'quit');
+
+  // The store may be empty if the app cold-started on this tab (deep link).
+  useEffect(() => {
+    if (challenges.length === 0) fetchChallenges();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchChallenges]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchChallenges();
+    setRefreshing(false);
+  }, [fetchChallenges]);
+
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -17,10 +36,12 @@ export default function HistoryScreen() {
       </View>
 
       {settled.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No past challenges</Text>
-          <Text style={styles.emptySubtitle}>Finish a challenge to see it here.</Text>
-        </View>
+        <ScrollView contentContainerStyle={styles.emptyScroll} refreshControl={refreshControl}>
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No past challenges</Text>
+            <Text style={styles.emptySubtitle}>Finish a challenge to see it here.</Text>
+          </View>
+        </ScrollView>
       ) : (
         <FlatList<Challenge>
           data={settled}
@@ -70,6 +91,7 @@ export default function HistoryScreen() {
             </TouchableOpacity>
           )}
           contentContainerStyle={styles.list}
+          refreshControl={refreshControl}
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         />
       )}
@@ -81,6 +103,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
   title: { fontSize: 26, fontFamily: 'HelveticaNeue-CondensedBlack', color: colors.text, letterSpacing: -0.5, transform: [{ scaleY: 1.35 }] },
+  emptyScroll: { flexGrow: 1 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   emptySubtitle: { fontSize: 14, color: colors.textSecondary },

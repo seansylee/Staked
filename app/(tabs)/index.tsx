@@ -1,16 +1,27 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { ChallengeCard } from '@/components/challenge/ChallengeCard';
+import { FetchErrorNotice } from '@/components/ui/FetchErrorNotice';
 import { colors } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { Challenge } from '@/types';
 import { isChallengeComplete } from '@/utils/protection';
 
 export default function DashboardScreen() {
-  const { challenges, isLoading, fetchChallenges } = useChallengeStore();
+  const { challenges, isLoading, fetchError, fetchChallenges } = useChallengeStore();
   const recoverPendingConfirmation = useChallengeStore((s) => s.recoverPendingConfirmation);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchChallenges();
@@ -26,9 +37,24 @@ export default function DashboardScreen() {
     return useChallengeStore.persist.onFinishHydration(() => recoverPendingConfirmation());
   }, [recoverPendingConfirmation]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchChallenges();
+    setRefreshing(false);
+  }, [fetchChallenges]);
+
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+  );
+
   const active = challenges
     .filter((c) => c.status === 'active')
     .sort((a, b) => Number(isChallengeComplete(b)) - Number(isChallengeComplete(a)));
+
+  const firstLoad = isLoading && !refreshing && challenges.length === 0 && !fetchError;
+  // A fetch failure with nothing cached must never render as "no active
+  // challenges" — a user with money staked would think it vanished.
+  const failedWithNothing = !!fetchError && challenges.length === 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -43,24 +69,30 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      {isLoading ? (
+      {fetchError && challenges.length > 0 && <FetchErrorNotice compact onRetry={fetchChallenges} />}
+
+      {firstLoad ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.textSecondary} />
         </View>
+      ) : failedWithNothing ? (
+        <FetchErrorNotice onRetry={fetchChallenges} />
       ) : active.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No active challenges</Text>
-          <Text style={styles.emptySubtitle}>
-            Stake money on your goals.{'\n'}Follow through to get it back.
-          </Text>
-          <TouchableOpacity
-            style={styles.emptyBtn}
-            onPress={() => router.push('/challenge/new/details')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.emptyBtnText}>Create Challenge</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView contentContainerStyle={styles.emptyScroll} refreshControl={refreshControl}>
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No active challenges</Text>
+            <Text style={styles.emptySubtitle}>
+              Stake money on your goals.{'\n'}Follow through to get it back.
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyBtn}
+              onPress={() => router.push('/challenge/new/details')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.emptyBtnText}>Create Challenge</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       ) : (
         <FlatList<Challenge>
           data={active}
@@ -68,6 +100,7 @@ export default function DashboardScreen() {
           renderItem={({ item }) => <ChallengeCard challenge={item} />}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         />
       )}
@@ -96,6 +129,7 @@ const styles = StyleSheet.create({
   },
   newBtnText: { color: colors.text, fontWeight: '600', fontSize: 13 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyScroll: { flexGrow: 1 },
   empty: {
     flex: 1,
     justifyContent: 'center',
