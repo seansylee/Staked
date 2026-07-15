@@ -103,7 +103,12 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
   },
 
   signOut: async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Local cleanup must happen even if the server call fails (e.g. the
+      // account was just deleted and the token is already invalid).
+    }
     posthog.reset();
     useChallengeStore.getState().reset();
     set({ session: null, user: null, profile: null });

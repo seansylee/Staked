@@ -16,7 +16,7 @@ export class ApiError extends Error {
 // reason (e.g. "Payment not completed", 409 conflicts) is in the response
 // body. Unwrap it so alerts show something actionable and callers can branch
 // on status.
-async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T> {
+export async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {
     if (error instanceof FunctionsHttpError) {
