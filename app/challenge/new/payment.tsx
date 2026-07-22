@@ -8,7 +8,7 @@ import {
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Button } from '@/components/ui/Button';
+import { SwipeToConfirm } from '@/components/ui/SwipeToConfirm';
 import { posthog } from '@/lib/posthog';
 import { DEMO_MODE } from '@/lib/demo';
 import { useUIStore } from '@/store/useUIStore';
@@ -295,11 +295,15 @@ export default function PaymentScreen() {
             <View style={styles.paidBox}>
               <Text style={styles.paidTitle}>✓ Payment received</Text>
               <Text style={styles.paidBody}>
-                One last step didn&apos;t finish. Tap below to create your challenge — you will not
-                be charged again.
+                One last step didn&apos;t finish. Swipe up below to create your challenge — you
+                will not be charged again.
               </Text>
             </View>
-            <Button title="Finish Setup — Already Paid" onPress={handleFinishSetup} loading={loading} />
+            <SwipeToConfirm
+              label="Swipe up to finish setup"
+              onConfirm={handleFinishSetup}
+              loading={loading}
+            />
           </>
         ) : (
           <>
@@ -320,9 +324,9 @@ export default function PaymentScreen() {
               </>
             )}
 
-            <Button
-              title={`Pay ${formatCurrency(totalCents)} & Start`}
-              onPress={handlePay}
+            <SwipeToConfirm
+              label={`Swipe up to pay ${formatCurrency(totalCents)} & start`}
+              onConfirm={handlePay}
               loading={loading}
             />
 
