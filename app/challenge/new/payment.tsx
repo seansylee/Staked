@@ -8,7 +8,7 @@ import {
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SwipeToConfirm } from '@/components/ui/SwipeToConfirm';
+import { SwipeStatus, SwipeToConfirm } from '@/components/ui/SwipeToConfirm';
 import { posthog } from '@/lib/posthog';
 import { DEMO_MODE } from '@/lib/demo';
 import { useUIStore } from '@/store/useUIStore';
@@ -59,6 +59,7 @@ export default function PaymentScreen() {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { isPlatformPaySupported, confirmPlatformPayPayment } = usePlatformPay();
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<SwipeStatus>('idle');
   const [walletSupported, setWalletSupported] = useState(false);
   const completing = useRef(false);
 
@@ -115,11 +116,20 @@ export default function PaymentScreen() {
       target_count: draftToConfirm.target_count,
     });
     await fetchChallenges();
-    const stakeDollars = Math.round(draftToConfirm.stake_amount_cents / 100);
-    showToast(`🔥 ${draftToConfirm.name} is live! $${stakeDollars} is on the line — make it count.`);
+  };
+
+  // Marks completing.current immediately (so the draft-guard effect doesn't
+  // race a redirect while the success curtain is showing), then holds on
+  // the confirmation panel briefly before handing off to the dashboard.
+  const revealSuccessThenNavigate = (draftToConfirm: ChallengeDraft) => {
     completing.current = true;
-    clearDraft();
-    router.replace('/(tabs)');
+    setStatus('success');
+    const stakeDollars = Math.round(draftToConfirm.stake_amount_cents / 100);
+    setTimeout(() => {
+      clearDraft();
+      showToast(`🔥 ${draftToConfirm.name} is live! $${stakeDollars} is on the line — make it count.`);
+      router.replace('/(tabs)');
+    }, 1400);
   };
 
   const alertSetupPending = () => {
@@ -131,10 +141,13 @@ export default function PaymentScreen() {
 
   const handleFinishSetup = async () => {
     if (!pendingConfirmation) return;
+    setStatus('processing');
     setLoading(true);
     try {
       await finishCreation(pendingConfirmation.paymentIntentId, pendingConfirmation.draft);
+      revealSuccessThenNavigate(pendingConfirmation.draft);
     } catch {
+      setStatus('idle');
       alertSetupPending();
     } finally {
       setLoading(false);
@@ -142,6 +155,7 @@ export default function PaymentScreen() {
   };
 
   const handleWalletPay = async () => {
+    setStatus('processing');
     setLoading(true);
     let paid = false;
     try {
@@ -167,12 +181,14 @@ export default function PaymentScreen() {
           posthog.capture('payment_failed', { error_code: error.code, method: 'wallet' });
           Alert.alert('Payment Failed', error.message);
         }
+        setStatus('idle');
         return;
       }
       paid = true;
       setPendingConfirmation({ paymentIntentId: intent.paymentIntentId, draft: activeDraft });
       setPendingPayment(null);
       await finishCreation(intent.paymentIntentId, activeDraft);
+      revealSuccessThenNavigate(activeDraft);
     } catch (err: unknown) {
       if (paid) {
         alertSetupPending();
@@ -180,12 +196,14 @@ export default function PaymentScreen() {
         const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
         Alert.alert('Error', message);
       }
+      setStatus('idle');
     } finally {
       setLoading(false);
     }
   };
 
   const handlePay = async () => {
+    setStatus('processing');
     setLoading(true);
     let paid = false;
     try {
@@ -198,11 +216,7 @@ export default function PaymentScreen() {
           target_count: activeDraft.target_count,
           demo: true,
         });
-        const stakeDollars = Math.round(activeDraft.stake_amount_cents / 100);
-        showToast(`🔥 ${activeDraft.name} is live! $${stakeDollars} is on the line — make it count.`);
-        completing.current = true;
-        clearDraft();
-        router.replace('/(tabs)');
+        revealSuccessThenNavigate(activeDraft);
         return;
       }
 
@@ -239,6 +253,7 @@ export default function PaymentScreen() {
           posthog.capture('payment_failed', { error_code: presentError.code });
           Alert.alert('Payment Failed', presentError.message);
         }
+        setStatus('idle');
         return;
       }
 
@@ -246,6 +261,7 @@ export default function PaymentScreen() {
       setPendingConfirmation({ paymentIntentId: intent.paymentIntentId, draft: activeDraft });
       setPendingPayment(null);
       await finishCreation(intent.paymentIntentId, activeDraft);
+      revealSuccessThenNavigate(activeDraft);
     } catch (err: unknown) {
       if (paid) {
         alertSetupPending();
@@ -253,45 +269,58 @@ export default function PaymentScreen() {
         const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
         Alert.alert('Error', message);
       }
+      setStatus('idle');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
+    <SwipeToConfirm
+      label={alreadyPaid ? 'Swipe up to finish setup' : `Swipe up to pay ${formatCurrency(totalCents)} & start`}
+      confirmTitle={alreadyPaid ? 'Setup complete!' : 'Payment confirmed!'}
+      confirmSubtitle={alreadyPaid ? undefined : `${formatCurrency(totalCents)} staked on ${activeDraft.name}`}
+      status={status}
+      onConfirm={alreadyPaid ? handleFinishSetup : handlePay}
+    >
+      <SafeAreaView style={styles.container}>
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+            <Text style={styles.backText}>←</Text>
+          </TouchableOpacity>
 
-        <Text style={styles.stepText}>3 / 3</Text>
-        <Text style={styles.title}>Review & Pay</Text>
+          <Text style={styles.stepText}>3 / 3</Text>
+          <Text style={styles.title}>Review & Pay</Text>
 
-        <View style={styles.card}>
-          <SummaryRow label="Challenge" value={activeDraft.name} />
-          <SummaryRow label="Duration" value={`${activeDraft.duration_days} days`} />
-          <SummaryRow label="Goal" value={`${activeDraft.target_count}× per ${windowLabel}`} />
-          {charity && <SummaryRow label="Charity" value={`${charity.emoji} ${charity.name}`} />}
-        </View>
+          <View style={styles.card}>
+            <SummaryRow label="Challenge" value={activeDraft.name} />
+            <SummaryRow label="Duration" value={`${activeDraft.duration_days} days`} />
+            <SummaryRow label="Goal" value={`${activeDraft.target_count}× per ${windowLabel}`} />
+            {charity && <SummaryRow label="Charity" value={`${charity.emoji} ${charity.name}`} />}
+          </View>
 
-        <View style={styles.card}>
-          <SummaryRow label="Stake" value={formatCurrency(activeDraft.stake_amount_cents)} />
-          <SummaryRow label="Platform fee" value={formatCurrency(PLATFORM_FEE_CENTS)} />
-          <View style={styles.divider} />
-          <SummaryRow label="Total" value={formatCurrency(totalCents)} large />
-        </View>
+          <View style={styles.card}>
+            <SummaryRow label="Stake" value={formatCurrency(activeDraft.stake_amount_cents)} />
+            <SummaryRow label="Platform fee" value={formatCurrency(PLATFORM_FEE_CENTS)} />
+            <View style={styles.divider} />
+            <SummaryRow label="Total" value={formatCurrency(totalCents)} large />
+          </View>
 
-        <Text style={styles.note}>
-          Staked holds your stake for {activeDraft.duration_days} days. Protected funds are returned
-          to you when the challenge ends
-          {charity
-            ? `; anything forfeited is donated to ${charity.name} at the end of the month.`
-            : '.'}
-        </Text>
+          <Text style={styles.note}>
+            Staked holds your stake for {activeDraft.duration_days} days. Protected funds are returned
+            to you when the challenge ends
+            {charity
+              ? `; anything forfeited is donated to ${charity.name} at the end of the month.`
+              : '.'}
+          </Text>
+        </ScrollView>
 
-        {alreadyPaid ? (
-          <>
+        <View style={styles.ctaArea}>
+          {alreadyPaid ? (
             <View style={styles.paidBox}>
               <Text style={styles.paidTitle}>✓ Payment received</Text>
               <Text style={styles.paidBody}>
@@ -299,46 +328,35 @@ export default function PaymentScreen() {
                 will not be charged again.
               </Text>
             </View>
-            <SwipeToConfirm
-              label="Swipe up to finish setup"
-              onConfirm={handleFinishSetup}
-              loading={loading}
-            />
-          </>
-        ) : (
-          <>
-            {walletSupported && (
-              <>
-                <PlatformPayButton
-                  type={PlatformPay.ButtonType.Pay}
-                  appearance={PlatformPay.ButtonStyle.White}
-                  disabled={loading}
-                  onPress={handleWalletPay}
-                  style={styles.walletButton}
-                />
-                <View style={styles.orRow}>
-                  <View style={styles.orLine} />
-                  <Text style={styles.orText}>or</Text>
-                  <View style={styles.orLine} />
-                </View>
-              </>
-            )}
+          ) : (
+            <>
+              {walletSupported && (
+                <>
+                  <PlatformPayButton
+                    type={PlatformPay.ButtonType.Pay}
+                    appearance={PlatformPay.ButtonStyle.White}
+                    disabled={loading}
+                    onPress={handleWalletPay}
+                    style={styles.walletButton}
+                  />
+                  <View style={styles.orRow}>
+                    <View style={styles.orLine} />
+                    <Text style={styles.orText}>or</Text>
+                    <View style={styles.orLine} />
+                  </View>
+                </>
+              )}
 
-            <SwipeToConfirm
-              label={`Swipe up to pay ${formatCurrency(totalCents)} & start`}
-              onConfirm={handlePay}
-              loading={loading}
-            />
-
-            <Text style={styles.methods}>
-              {walletSupported
-                ? 'One-tap with Apple Pay or Google Pay, or pay by card'
-                : 'Pay securely with card, Apple Pay, or Google Pay'}
-            </Text>
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+              <Text style={styles.methods}>
+                {walletSupported
+                  ? 'One-tap with Apple Pay or Google Pay, or pay by card'
+                  : 'Pay securely with card, Apple Pay, or Google Pay'}
+              </Text>
+            </>
+          )}
+        </View>
+      </SafeAreaView>
+    </SwipeToConfirm>
   );
 }
 
@@ -368,7 +386,17 @@ const rowStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  scroll: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 48, gap: 12 },
+  scrollArea: { flex: 1 },
+  scroll: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 24, gap: 12 },
+  ctaArea: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 8,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.bg,
+  },
   back: { paddingVertical: 12 },
   backText: { fontSize: 22, color: colors.textSecondary },
   stepText: {

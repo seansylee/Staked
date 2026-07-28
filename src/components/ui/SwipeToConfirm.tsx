@@ -1,37 +1,52 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { ReactNode, useEffect, useMemo, useRef } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  PanResponder,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 
-const TRACK_HEIGHT = 190;
-const THUMB_SIZE = 60;
-const THUMB_INSET = 6;
-const TRAVEL = TRACK_HEIGHT - THUMB_SIZE - THUMB_INSET * 2;
-const CONFIRM_THRESHOLD = 0.6;
+const DRAG_ZONE = 90;
+const CONFIRM_THRESHOLD = 0.55;
+const THUMB_SIZE = 56;
+
+export type SwipeStatus = 'idle' | 'processing' | 'success';
 
 interface SwipeToConfirmProps {
   label: string;
-  loading?: boolean;
-  disabled?: boolean;
+  confirmTitle: string;
+  confirmSubtitle?: string;
+  status: SwipeStatus;
   onConfirm: () => void;
+  children: ReactNode;
 }
 
-export function SwipeToConfirm({ label, loading = false, disabled = false, onConfirm }: SwipeToConfirmProps) {
-  const [confirmed, setConfirmed] = useState(false);
-  const pan = useRef(new Animated.Value(0)).current;
+// A vertical curtain-pull: dragging the handle peels the current screen
+// upward, revealing a lighter confirmation panel underneath. Crossing the
+// threshold hands off to a canned animation so the user never has to drag
+// their finger the full screen height to complete the gesture.
+export function SwipeToConfirm({
+  label,
+  confirmTitle,
+  confirmSubtitle,
+  status,
+  onConfirm,
+  children,
+}: SwipeToConfirmProps) {
+  const { height: screenHeight } = useWindowDimensions();
+  const curtain = useRef(new Animated.Value(0)).current;
   const hint = useRef(new Animated.Value(0)).current;
-  const valueRef = useRef(0);
-  const grantValueRef = useRef(0);
-  const firedRef = useRef(false);
+  const badgeScale = useRef(new Animated.Value(0.75)).current;
+  const grantRef = useRef(0);
+  const armedRef = useRef(false);
+  const prevStatusRef = useRef<SwipeStatus>(status);
 
-  const locked = disabled || confirmed || loading;
-
-  useEffect(() => {
-    const id = pan.addListener(({ value }) => {
-      valueRef.current = value;
-    });
-    return () => pan.removeListener(id);
-  }, [pan]);
+  const locked = status !== 'idle';
 
   useEffect(() => {
     if (locked) return;
@@ -46,25 +61,18 @@ export function SwipeToConfirm({ label, loading = false, disabled = false, onCon
   }, [hint, locked]);
 
   useEffect(() => {
-    if (!loading && firedRef.current) {
-      firedRef.current = false;
-      setConfirmed(false);
-      Animated.timing(pan, { toValue: 0, duration: 220, useNativeDriver: true }).start();
+    if (status !== 'idle') {
+      Animated.timing(curtain, { toValue: -screenHeight, duration: 420, useNativeDriver: true }).start();
+      badgeScale.setValue(0.75);
+      Animated.spring(badgeScale, { toValue: 1, useNativeDriver: true, bounciness: 12, speed: 14 }).start();
+    } else if (prevStatusRef.current !== 'idle') {
+      // A processing attempt just failed — the parent flipped status back
+      // to idle, so pull the curtain back down to reveal the retry state.
+      armedRef.current = false;
+      Animated.spring(curtain, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
     }
-  }, [loading, pan]);
-
-  const finalizeGesture = (dy: number) => {
-    const next = clamp(grantValueRef.current + dy, -TRAVEL, 0);
-    const crossed = Math.abs(next) >= TRAVEL * CONFIRM_THRESHOLD;
-    if (crossed) {
-      firedRef.current = true;
-      setConfirmed(true);
-      Animated.spring(pan, { toValue: -TRAVEL, useNativeDriver: true, bounciness: 4 }).start();
-      onConfirm();
-    } else {
-      Animated.spring(pan, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
-    }
-  };
+    prevStatusRef.current = status;
+  }, [status, screenHeight, curtain, badgeScale]);
 
   const panResponder = useMemo(
     () =>
@@ -72,52 +80,66 @@ export function SwipeToConfirm({ label, loading = false, disabled = false, onCon
         onStartShouldSetPanResponder: () => !locked,
         onMoveShouldSetPanResponder: (_, gesture) => !locked && Math.abs(gesture.dy) > 2,
         onPanResponderGrant: () => {
-          grantValueRef.current = valueRef.current;
+          grantRef.current = 0;
         },
         onPanResponderMove: (_, gesture) => {
-          const next = clamp(grantValueRef.current + gesture.dy, -TRAVEL, 0);
-          pan.setValue(next);
+          const next = clamp(grantRef.current + gesture.dy, -DRAG_ZONE, 0);
+          curtain.setValue(next);
         },
-        onPanResponderRelease: (_, gesture) => finalizeGesture(gesture.dy),
-        onPanResponderTerminate: (_, gesture) => finalizeGesture(gesture.dy),
+        onPanResponderRelease: (_, gesture) => finalize(gesture.dy),
+        onPanResponderTerminate: (_, gesture) => finalize(gesture.dy),
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [locked]
+    [locked, screenHeight]
   );
 
-  const fillHeight = pan.interpolate({
-    inputRange: [-TRAVEL, 0],
-    outputRange: [TRACK_HEIGHT, THUMB_SIZE + THUMB_INSET * 2],
-    extrapolate: 'clamp',
-  });
-
-  const labelOpacity = pan.interpolate({
-    inputRange: [-TRAVEL * CONFIRM_THRESHOLD, 0],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  const finalize = (dy: number) => {
+    const next = clamp(grantRef.current + dy, -DRAG_ZONE, 0);
+    const crossed = Math.abs(next) >= DRAG_ZONE * CONFIRM_THRESHOLD;
+    if (crossed) {
+      armedRef.current = true;
+      Animated.timing(curtain, { toValue: -screenHeight, duration: 420, useNativeDriver: true }).start();
+      onConfirm();
+    } else {
+      Animated.spring(curtain, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+    }
+  };
 
   const hintTranslate = hint.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
 
   return (
-    <View style={styles.track}>
-      <Animated.View style={[styles.fill, { height: fillHeight }]} />
-
-      <Animated.Text style={[styles.label, { opacity: labelOpacity }]} pointerEvents="none">
-        {label}
-      </Animated.Text>
-
-      <Animated.View
-        {...panResponder.panHandlers}
-        style={[styles.thumb, { transform: [{ translateY: pan }] }]}
-      >
-        {confirmed || loading ? (
-          <ActivityIndicator color={colors.black} size="small" />
-        ) : (
-          <Animated.View style={{ transform: [{ translateY: hintTranslate }] }}>
-            <Ionicons name="chevron-up" size={26} color={colors.black} />
+    <View style={styles.stage}>
+      <View style={styles.confirmPanel}>
+        {status !== 'idle' && (
+          <Animated.View style={[styles.badge, { transform: [{ scale: badgeScale }] }]}>
+            <View style={styles.badgeIcon}>
+              {status === 'success' ? (
+                <Ionicons name="checkmark" size={30} color={colors.black} />
+              ) : (
+                <ActivityIndicator color={colors.black} size="small" />
+              )}
+            </View>
+            <Text style={styles.badgeTitle}>
+              {status === 'success' ? confirmTitle : 'Processing payment…'}
+            </Text>
+            {status === 'success' && confirmSubtitle && (
+              <Text style={styles.badgeSubtitle}>{confirmSubtitle}</Text>
+            )}
           </Animated.View>
         )}
+      </View>
+
+      <Animated.View style={[styles.curtain, { transform: [{ translateY: curtain }] }]}>
+        {children}
+
+        <View style={styles.handleZone}>
+          <Text style={styles.hintLabel}>{label}</Text>
+          <Animated.View {...panResponder.panHandlers} style={styles.thumb}>
+            <Animated.View style={{ transform: [{ translateY: hintTranslate }] }}>
+              <Ionicons name="chevron-up" size={26} color={colors.black} />
+            </Animated.View>
+          </Animated.View>
+        </View>
       </Animated.View>
     </View>
   );
@@ -128,30 +150,37 @@ function clamp(value: number, min: number, max: number) {
 }
 
 const styles = StyleSheet.create({
-  track: {
-    height: TRACK_HEIGHT,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceHigh,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'flex-end',
+  stage: { flex: 1 },
+  confirmPanel: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.text,
     alignItems: 'center',
-    overflow: 'hidden',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
   },
-  fill: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.white,
-    opacity: 0.08,
+  badge: { alignItems: 'center', gap: 10 },
+  badgeIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
-  label: {
-    position: 'absolute',
-    top: 22,
-    left: 16,
-    right: 16,
-    textAlign: 'center',
+  badgeTitle: { fontSize: 20, fontWeight: '700', color: colors.black, textAlign: 'center' },
+  badgeSubtitle: { fontSize: 14, color: colors.black, opacity: 0.6, textAlign: 'center' },
+  curtain: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  handleZone: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 8,
+    gap: 10,
+  },
+  hintLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.textSecondary,
@@ -163,7 +192,6 @@ const styles = StyleSheet.create({
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
     backgroundColor: colors.white,
-    marginBottom: THUMB_INSET,
     justifyContent: 'center',
     alignItems: 'center',
   },
