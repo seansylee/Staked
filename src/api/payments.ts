@@ -57,6 +57,25 @@ export async function createPaymentIntent(amountCents: number): Promise<PaymentI
   };
 }
 
+export interface CustomerSessionHandle {
+  customerId: string;
+  ephemeralKeySecret: string;
+  setupIntentClientSecret: string;
+}
+
+export async function createCustomerSession(): Promise<CustomerSessionHandle> {
+  const data = await invoke<{
+    customer_id: string;
+    ephemeral_key_secret: string;
+    setup_intent_client_secret: string;
+  }>('create-customer-session', {});
+  return {
+    customerId: data.customer_id,
+    ephemeralKeySecret: data.ephemeral_key_secret,
+    setupIntentClientSecret: data.setup_intent_client_secret,
+  };
+}
+
 export async function confirmChallengeStart(
   paymentIntentId: string,
   draft: ChallengeDraft

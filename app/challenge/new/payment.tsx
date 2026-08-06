@@ -1,23 +1,39 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  CustomerSheet,
+  CustomerSheetResult,
   PlatformPay,
   PlatformPayButton,
   useStripe,
   usePlatformPay,
 } from '@stripe/stripe-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SwipeStatus, SwipeToConfirm } from '@/components/ui/SwipeToConfirm';
 import { posthog } from '@/lib/posthog';
 import { DEMO_MODE } from '@/lib/demo';
-import { useUIStore } from '@/store/useUIStore';
 import { getCharityById } from '@/lib/charities';
-import { ApiError, confirmChallengeStart, createPaymentIntent } from '@/api/payments';
+import {
+  ApiError,
+  confirmChallengeStart,
+  createCustomerSession,
+  createPaymentIntent,
+  CustomerSessionHandle,
+} from '@/api/payments';
 import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 import { ChallengeDraft } from '@/types';
 import { formatCurrency } from '@/utils/formatting';
+
+interface SelectedPaymentMethod {
+  id: string;
+  brand?: string;
+  last4?: string;
+}
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const PLATFORM_FEE_CENTS = 300;
 
@@ -55,12 +71,14 @@ export default function PaymentScreen() {
     pendingConfirmation,
     setPendingConfirmation,
   } = useChallengeStore();
-  const showToast = useUIStore((s) => s.showToast);
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const { confirmPayment } = useStripe();
   const { isPlatformPaySupported, confirmPlatformPayPayment } = usePlatformPay();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<SwipeStatus>('idle');
   const [walletSupported, setWalletSupported] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<SelectedPaymentMethod | null>(null);
+  const [customerSession, setCustomerSession] = useState<CustomerSessionHandle | null>(null);
+  const [customerSheetVisible, setCustomerSheetVisible] = useState(false);
   const completing = useRef(false);
 
   useEffect(() => {
@@ -75,6 +93,28 @@ export default function PaymentScreen() {
       router.replace('/challenge/new/details');
     }
   }, [draft, pendingConfirmation]);
+
+  const openPaymentMethodPicker = async () => {
+    try {
+      const session = customerSession ?? (await createCustomerSession());
+      if (!customerSession) setCustomerSession(session);
+      setCustomerSheetVisible(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not load payment methods.';
+      Alert.alert('Error', message);
+    }
+  };
+
+  const handleCustomerSheetResult = ({ error, paymentMethod: pm }: CustomerSheetResult) => {
+    setCustomerSheetVisible(false);
+    if (error) {
+      if (error.code !== 'Canceled') Alert.alert('Error', error.message);
+      return;
+    }
+    if (pm) {
+      setPaymentMethod({ id: pm.id, brand: pm.Card?.brand, last4: pm.Card?.last4 });
+    }
+  };
 
   if (!draft && !pendingConfirmation) return null;
 
@@ -100,12 +140,17 @@ export default function PaymentScreen() {
     return pending;
   };
 
-  const finishCreation = async (paymentIntentId: string, draftToConfirm: ChallengeDraft) => {
+  // Returns the created challenge's id. On a 409 (this payment already
+  // created its challenge on an earlier retry) that's success, not failure —
+  // the id just has to be recovered from the freshly-fetched store instead.
+  const finishCreation = async (
+    paymentIntentId: string,
+    draftToConfirm: ChallengeDraft
+  ): Promise<string> => {
+    let challengeId: string | null = null;
     try {
-      await confirmChallengeStart(paymentIntentId, draftToConfirm);
+      challengeId = await confirmChallengeStart(paymentIntentId, draftToConfirm);
     } catch (err) {
-      // 409 = this payment already created its challenge (an earlier retry
-      // landed) — that's success, not failure.
       if (!(err instanceof ApiError && err.status === 409)) throw err;
     }
     setPendingConfirmation(null);
@@ -116,20 +161,22 @@ export default function PaymentScreen() {
       target_count: draftToConfirm.target_count,
     });
     await fetchChallenges();
+    if (!challengeId) {
+      challengeId =
+        useChallengeStore.getState().challenges.find((c) => c.stripe_payment_intent_id === paymentIntentId)
+          ?.id ?? null;
+    }
+    if (!challengeId) throw new Error('Challenge created but could not be located.');
+    return challengeId;
   };
 
   // Marks completing.current immediately (so the draft-guard effect doesn't
-  // race a redirect while the success curtain is showing), then holds on
-  // the confirmation panel briefly before handing off to the dashboard.
-  const revealSuccessThenNavigate = (draftToConfirm: ChallengeDraft) => {
+  // race a redirect while navigation is in flight), then hands off to the
+  // dedicated confirmation screen — its own moment, not an overlay on this one.
+  const navigateToConfirmation = (challengeId: string) => {
     completing.current = true;
-    setStatus('success');
-    const stakeDollars = Math.round(draftToConfirm.stake_amount_cents / 100);
-    setTimeout(() => {
-      clearDraft();
-      showToast(`🔥 ${draftToConfirm.name} is live! $${stakeDollars} is on the line — make it count.`);
-      router.replace('/(tabs)');
-    }, 1400);
+    clearDraft();
+    router.replace({ pathname: '/challenge/new/confirmed', params: { id: challengeId } });
   };
 
   const alertSetupPending = () => {
@@ -144,8 +191,8 @@ export default function PaymentScreen() {
     setStatus('processing');
     setLoading(true);
     try {
-      await finishCreation(pendingConfirmation.paymentIntentId, pendingConfirmation.draft);
-      revealSuccessThenNavigate(pendingConfirmation.draft);
+      const challengeId = await finishCreation(pendingConfirmation.paymentIntentId, pendingConfirmation.draft);
+      navigateToConfirmation(challengeId);
     } catch {
       setStatus('idle');
       alertSetupPending();
@@ -187,8 +234,8 @@ export default function PaymentScreen() {
       paid = true;
       setPendingConfirmation({ paymentIntentId: intent.paymentIntentId, draft: activeDraft });
       setPendingPayment(null);
-      await finishCreation(intent.paymentIntentId, activeDraft);
-      revealSuccessThenNavigate(activeDraft);
+      const challengeId = await finishCreation(intent.paymentIntentId, activeDraft);
+      navigateToConfirmation(challengeId);
     } catch (err: unknown) {
       if (paid) {
         alertSetupPending();
@@ -203,12 +250,17 @@ export default function PaymentScreen() {
   };
 
   const handlePay = async () => {
+    if (!DEMO_MODE && !paymentMethod) {
+      // Guarded by SwipeToConfirm's `disabled` prop — this shouldn't fire,
+      // but bail out rather than confirm with no payment method.
+      return;
+    }
     setStatus('processing');
     setLoading(true);
     let paid = false;
     try {
       if (DEMO_MODE) {
-        addDemoChallenge(activeDraft);
+        const challengeId = addDemoChallenge(activeDraft);
         posthog.capture('challenge_created', {
           stake_cents: activeDraft.stake_amount_cents,
           duration_days: activeDraft.duration_days,
@@ -216,43 +268,18 @@ export default function PaymentScreen() {
           target_count: activeDraft.target_count,
           demo: true,
         });
-        revealSuccessThenNavigate(activeDraft);
+        navigateToConfirmation(challengeId);
         return;
       }
 
       const intent = await getOrCreateIntent();
-      const { error: initError } = await initPaymentSheet({
-        paymentIntentClientSecret: intent.clientSecret,
-        merchantDisplayName: 'Staked',
-        returnURL: 'staked://payment-complete',
-        appearance: sheetAppearance,
-        applePay: {
-          merchantCountryCode: 'US',
-          cartItems: [
-            { label: 'Stake (refundable)', amount: dollars(activeDraft.stake_amount_cents), paymentType: 'Immediate' },
-            { label: 'Platform fee', amount: dollars(PLATFORM_FEE_CENTS), paymentType: 'Immediate' },
-            { label: 'Staked', amount: dollars(totalCents), paymentType: 'Immediate' },
-          ],
-        },
-        googlePay: {
-          merchantCountryCode: 'US',
-          testEnv: true,
-          currencyCode: 'USD',
-        },
+      const { error: confirmError } = await confirmPayment(intent.clientSecret, {
+        paymentMethodType: 'Card',
+        paymentMethodData: { paymentMethodId: paymentMethod!.id },
       });
-      if (initError) {
-        // The stored intent may be unusable (e.g. cancelled server-side) —
-        // drop it so the next attempt starts fresh.
-        setPendingPayment(null);
-        throw new Error(initError.message);
-      }
-
-      const { error: presentError } = await presentPaymentSheet();
-      if (presentError) {
-        if (presentError.code !== 'Canceled') {
-          posthog.capture('payment_failed', { error_code: presentError.code });
-          Alert.alert('Payment Failed', presentError.message);
-        }
+      if (confirmError) {
+        posthog.capture('payment_failed', { error_code: confirmError.code });
+        Alert.alert('Payment Failed', confirmError.message);
         setStatus('idle');
         return;
       }
@@ -260,8 +287,8 @@ export default function PaymentScreen() {
       paid = true;
       setPendingConfirmation({ paymentIntentId: intent.paymentIntentId, draft: activeDraft });
       setPendingPayment(null);
-      await finishCreation(intent.paymentIntentId, activeDraft);
-      revealSuccessThenNavigate(activeDraft);
+      const challengeId = await finishCreation(intent.paymentIntentId, activeDraft);
+      navigateToConfirmation(challengeId);
     } catch (err: unknown) {
       if (paid) {
         alertSetupPending();
@@ -277,10 +304,15 @@ export default function PaymentScreen() {
 
   return (
     <SwipeToConfirm
-      label={alreadyPaid ? 'Swipe up to finish setup' : `Swipe up to pay ${formatCurrency(totalCents)} & start`}
-      confirmTitle={alreadyPaid ? 'Setup complete!' : 'Payment confirmed!'}
-      confirmSubtitle={alreadyPaid ? undefined : `${formatCurrency(totalCents)} staked on ${activeDraft.name}`}
+      label={
+        alreadyPaid
+          ? 'Swipe up to finish setup'
+          : !DEMO_MODE && !paymentMethod
+            ? 'Select a payment method to continue'
+            : `Swipe up to pay ${formatCurrency(totalCents)} & start`
+      }
       status={status}
+      disabled={!alreadyPaid && !DEMO_MODE && !paymentMethod}
       onConfirm={alreadyPaid ? handleFinishSetup : handlePay}
     >
       <SafeAreaView style={styles.container}>
@@ -309,6 +341,24 @@ export default function PaymentScreen() {
             <View style={styles.divider} />
             <SummaryRow label="Total" value={formatCurrency(totalCents)} large />
           </View>
+
+          {!alreadyPaid && !DEMO_MODE && (
+            <TouchableOpacity
+              style={styles.paymentMethodRow}
+              onPress={openPaymentMethodPicker}
+              disabled={loading}
+            >
+              <Text style={styles.paymentMethodLabel}>Payment method</Text>
+              <View style={styles.paymentMethodValue}>
+                <Text style={styles.paymentMethodText}>
+                  {paymentMethod
+                    ? `${paymentMethod.brand ? capitalize(paymentMethod.brand) : 'Card'} •••• ${paymentMethod.last4}`
+                    : 'Add a payment method'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </View>
+            </TouchableOpacity>
+          )}
 
           <Text style={styles.note}>
             Staked holds your stake for {activeDraft.duration_days} days. Protected funds are returned
@@ -356,6 +406,19 @@ export default function PaymentScreen() {
           )}
         </View>
       </SafeAreaView>
+
+      {customerSession && (
+        <CustomerSheet.Component
+          visible={customerSheetVisible}
+          customerId={customerSession.customerId}
+          customerEphemeralKeySecret={customerSession.ephemeralKeySecret}
+          setupIntentClientSecret={customerSession.setupIntentClientSecret}
+          merchantDisplayName="Staked"
+          returnURL="staked://payment-complete"
+          appearance={sheetAppearance}
+          onResult={handleCustomerSheetResult}
+        />
+      )}
     </SwipeToConfirm>
   );
 }
@@ -416,6 +479,20 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   divider: { height: 1, backgroundColor: colors.border },
+  paymentMethodRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  paymentMethodLabel: { fontSize: 14, color: colors.textSecondary },
+  paymentMethodValue: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  paymentMethodText: { fontSize: 14, fontWeight: '600', color: colors.text },
   note: {
     fontSize: 12,
     color: colors.textMuted,

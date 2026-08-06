@@ -1,52 +1,34 @@
 import { ReactNode, useEffect, useMemo, useRef } from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  PanResponder,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/theme';
 
-const DRAG_ZONE = 90;
-const CONFIRM_THRESHOLD = 0.55;
-const THUMB_SIZE = 56;
+const DRAG_ZONE = 70;
+const CONFIRM_THRESHOLD = 0.6;
+const BAR_CONTENT_HEIGHT = 96;
 
-export type SwipeStatus = 'idle' | 'processing' | 'success';
+export type SwipeStatus = 'idle' | 'processing';
 
 interface SwipeToConfirmProps {
   label: string;
-  confirmTitle: string;
-  confirmSubtitle?: string;
   status: SwipeStatus;
+  disabled?: boolean;
   onConfirm: () => void;
   children: ReactNode;
 }
 
-// A vertical curtain-pull: dragging the handle peels the current screen
-// upward, revealing a lighter confirmation panel underneath. Crossing the
-// threshold hands off to a canned animation so the user never has to drag
-// their finger the full screen height to complete the gesture.
-export function SwipeToConfirm({
-  label,
-  confirmTitle,
-  confirmSubtitle,
-  status,
-  onConfirm,
-  children,
-}: SwipeToConfirmProps) {
-  const { height: screenHeight } = useWindowDimensions();
-  const curtain = useRef(new Animated.Value(0)).current;
+// A slim, always-visible bar pinned to the bottom — mirrors a standard
+// brokerage-app buy flow (chevron + "Swipe Up To Submit", solid color,
+// no separate handle). The whole bar is the drag surface; crossing the
+// threshold hands off to the parent, which shows a processing spinner in
+// place and then navigates to a dedicated confirmation screen on success.
+export function SwipeToConfirm({ label, status, disabled = false, onConfirm, children }: SwipeToConfirmProps) {
+  const insets = useSafeAreaInsets();
+  const lift = useRef(new Animated.Value(0)).current;
   const hint = useRef(new Animated.Value(0)).current;
-  const badgeScale = useRef(new Animated.Value(0.75)).current;
-  const grantRef = useRef(0);
-  const armedRef = useRef(false);
-  const prevStatusRef = useRef<SwipeStatus>(status);
 
-  const locked = status !== 'idle';
+  const locked = disabled || status !== 'idle';
 
   useEffect(() => {
     if (locked) return;
@@ -60,86 +42,58 @@ export function SwipeToConfirm({
     return () => loop.stop();
   }, [hint, locked]);
 
-  useEffect(() => {
-    if (status !== 'idle') {
-      Animated.timing(curtain, { toValue: -screenHeight, duration: 420, useNativeDriver: true }).start();
-      badgeScale.setValue(0.75);
-      Animated.spring(badgeScale, { toValue: 1, useNativeDriver: true, bounciness: 12, speed: 14 }).start();
-    } else if (prevStatusRef.current !== 'idle') {
-      // A processing attempt just failed — the parent flipped status back
-      // to idle, so pull the curtain back down to reveal the retry state.
-      armedRef.current = false;
-      Animated.spring(curtain, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
-    }
-    prevStatusRef.current = status;
-  }, [status, screenHeight, curtain, badgeScale]);
-
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => !locked,
         onMoveShouldSetPanResponder: (_, gesture) => !locked && Math.abs(gesture.dy) > 2,
-        onPanResponderGrant: () => {
-          grantRef.current = 0;
-        },
         onPanResponderMove: (_, gesture) => {
-          const next = clamp(grantRef.current + gesture.dy, -DRAG_ZONE, 0);
-          curtain.setValue(next);
+          const extra = clamp(-gesture.dy, 0, DRAG_ZONE);
+          lift.setValue(-extra * 0.3);
         },
         onPanResponderRelease: (_, gesture) => finalize(gesture.dy),
         onPanResponderTerminate: (_, gesture) => finalize(gesture.dy),
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [locked, screenHeight]
+    [locked]
   );
 
   const finalize = (dy: number) => {
-    const next = clamp(grantRef.current + dy, -DRAG_ZONE, 0);
-    const crossed = Math.abs(next) >= DRAG_ZONE * CONFIRM_THRESHOLD;
-    if (crossed) {
-      armedRef.current = true;
-      Animated.timing(curtain, { toValue: -screenHeight, duration: 420, useNativeDriver: true }).start();
-      onConfirm();
-    } else {
-      Animated.spring(curtain, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
-    }
+    const extra = clamp(-dy, 0, DRAG_ZONE);
+    const crossed = extra >= DRAG_ZONE * CONFIRM_THRESHOLD;
+    Animated.spring(lift, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+    if (crossed) onConfirm();
   };
 
-  const hintTranslate = hint.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
+  const hintTranslate = hint.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
+  const idleDisabled = disabled && status === 'idle';
+  const hintColor = idleDisabled ? colors.textSecondary : colors.white;
 
   return (
     <View style={styles.stage}>
-      <View style={styles.confirmPanel}>
-        {status !== 'idle' && (
-          <Animated.View style={[styles.badge, { transform: [{ scale: badgeScale }] }]}>
-            <View style={styles.badgeIcon}>
-              {status === 'success' ? (
-                <Ionicons name="checkmark" size={30} color={colors.black} />
-              ) : (
-                <ActivityIndicator color={colors.black} size="small" />
-              )}
-            </View>
-            <Text style={styles.badgeTitle}>
-              {status === 'success' ? confirmTitle : 'Processing payment…'}
-            </Text>
-            {status === 'success' && confirmSubtitle && (
-              <Text style={styles.badgeSubtitle}>{confirmSubtitle}</Text>
-            )}
-          </Animated.View>
-        )}
-      </View>
+      <View style={styles.content}>{children}</View>
 
-      <Animated.View style={[styles.curtain, { transform: [{ translateY: curtain }] }]}>
-        {children}
-
-        <View style={styles.handleZone}>
-          <Text style={styles.hintLabel}>{label}</Text>
-          <Animated.View {...panResponder.panHandlers} style={styles.thumb}>
+      <Animated.View
+        {...(locked ? {} : panResponder.panHandlers)}
+        style={[
+          styles.bar,
+          idleDisabled && styles.barDisabled,
+          { paddingBottom: insets.bottom + 14, transform: [{ translateY: lift }] },
+        ]}
+      >
+        {status === 'processing' ? (
+          <View style={styles.hintStack}>
+            <ActivityIndicator color={colors.white} size="small" />
+            <Text style={styles.label}>Processing…</Text>
+          </View>
+        ) : (
+          <View style={styles.hintStack}>
             <Animated.View style={{ transform: [{ translateY: hintTranslate }] }}>
-              <Ionicons name="chevron-up" size={26} color={colors.black} />
+              <Ionicons name="chevron-up" size={18} color={hintColor} />
             </Animated.View>
-          </Animated.View>
-        </View>
+            <Text style={[styles.label, { color: hintColor }]}>{label}</Text>
+          </View>
+        )}
       </Animated.View>
     </View>
   );
@@ -151,48 +105,15 @@ function clamp(value: number, min: number, max: number) {
 
 const styles = StyleSheet.create({
   stage: { flex: 1 },
-  confirmPanel: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  badge: { alignItems: 'center', gap: 10 },
-  badgeIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  content: { flex: 1, backgroundColor: colors.bg },
+  bar: {
+    minHeight: BAR_CONTENT_HEIGHT,
     backgroundColor: colors.success,
+    paddingTop: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
   },
-  badgeTitle: { fontSize: 20, fontWeight: '700', color: colors.black, textAlign: 'center' },
-  badgeSubtitle: { fontSize: 14, color: colors.black, opacity: 0.6, textAlign: 'center' },
-  curtain: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  handleZone: {
-    alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 8,
-    gap: 10,
-  },
-  hintLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  thumb: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: THUMB_SIZE / 2,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  barDisabled: { backgroundColor: colors.surfaceHigh },
+  hintStack: { alignItems: 'center', gap: 6 },
+  label: { fontSize: 15, fontWeight: '700', letterSpacing: 0.2, color: colors.white },
 });
