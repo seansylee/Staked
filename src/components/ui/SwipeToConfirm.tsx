@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useMemo, useRef } from 'react';
 import { ActivityIndicator, Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/constants/theme';
+import { colors, radius } from '@/constants/theme';
 
 const DRAG_ZONE = 70;
 const CONFIRM_THRESHOLD = 0.6;
@@ -104,11 +104,13 @@ function clamp(value: number, min: number, max: number) {
 }
 
 const styles = StyleSheet.create({
-  stage: { flex: 1 },
+  stage: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, backgroundColor: colors.bg },
   bar: {
     minHeight: BAR_CONTENT_HEIGHT,
     backgroundColor: colors.success,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
     paddingTop: 16,
     alignItems: 'center',
     justifyContent: 'center',
