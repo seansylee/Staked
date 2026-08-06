@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
-import { CHARITIES } from '@/lib/charities';
+import { FEATURED_CHARITIES } from '@/lib/charities';
 import { colors, radius } from '@/constants/theme';
 import { useChallengeStore } from '@/store/useChallengeStore';
 
@@ -37,7 +37,7 @@ export default function CharityScreen() {
           at the end of the month.
         </Text>
 
-        {CHARITIES.map((c) => {
+        {FEATURED_CHARITIES.map((c) => {
           const isActive = selected === c.id;
           return (
             <TouchableOpacity
